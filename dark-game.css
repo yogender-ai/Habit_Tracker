@@ -1,0 +1,567 @@
+/* ═══════════════════════════════════════════════════════════
+   DAYFORGE — DARK GAME MODE OVERRIDE
+   ═══════════════════════════════════════════════════════════ */
+
+:root {
+    color-scheme: dark;
+    --paper: #0c0e14;
+    --paper-strong: #13151d;
+    --ink: #e8ecf4;
+    --muted: #7a8599;
+    --soft: #1e2233;
+    --line: rgba(255,255,255,0.06);
+    --panel: rgba(16,18,28,0.92);
+    --teal: #00e5a0;
+    --teal-soft: rgba(0,229,160,0.1);
+    --green: #22c55e;
+    --green-soft: rgba(34,197,94,0.12);
+    --coral: #ef4444;
+    --coral-soft: rgba(239,68,68,0.1);
+    --blue: #6366f1;
+    --blue-soft: rgba(99,102,241,0.1);
+    --amber: #f59e0b;
+    --amber-soft: rgba(245,158,11,0.1);
+    --violet: #8b5cf6;
+    --violet-soft: rgba(139,92,246,0.1);
+    --shadow: 0 20px 60px rgba(0,0,0,0.5);
+    --radius: 10px;
+    --ease: cubic-bezier(0.22,1,0.36,1);
+    --glow-teal: 0 0 20px rgba(0,229,160,0.15);
+    --glow-violet: 0 0 20px rgba(139,92,246,0.15);
+}
+
+body {
+    background:
+        radial-gradient(ellipse 80% 60% at 10% 5%, rgba(0,229,160,0.04), transparent 50%),
+        radial-gradient(ellipse 70% 50% at 90% 15%, rgba(139,92,246,0.04), transparent 45%),
+        linear-gradient(rgba(0,229,160,0.015) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(139,92,246,0.012) 1px, transparent 1px),
+        var(--paper) !important;
+    background-size: 100%, 100%, 48px 48px, 48px 48px;
+}
+
+/* Starfield dots */
+body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0;
+    pointer-events: none;
+    background-image:
+        radial-gradient(1px 1px at 12% 20%, rgba(0,229,160,0.35), transparent),
+        radial-gradient(1px 1px at 35% 55%, rgba(139,92,246,0.3), transparent),
+        radial-gradient(1px 1px at 70% 15%, rgba(99,102,241,0.25), transparent),
+        radial-gradient(1px 1px at 85% 75%, rgba(0,229,160,0.2), transparent),
+        radial-gradient(1px 1px at 50% 38%, rgba(139,92,246,0.2), transparent),
+        radial-gradient(0.8px 0.8px at 22% 80%, rgba(0,229,160,0.18), transparent),
+        radial-gradient(0.8px 0.8px at 62% 88%, rgba(255,255,255,0.12), transparent);
+    animation: starTwinkle 40s linear infinite alternate;
+}
+@keyframes starTwinkle { 0%,100%{opacity:.5} 50%{opacity:1} }
+
+/* ── Panels & Cards ─────────────────────────────────────── */
+.side-rail, .workspace, .calendar-board, .day-panel,
+.insight-panel, .metric-card {
+    border: 1px solid rgba(255,255,255,0.04) !important;
+    background: rgba(13,15,23,0.88) !important;
+    box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.02) !important;
+    backdrop-filter: blur(24px) saturate(1.2) !important;
+}
+
+/* Hover lift on cards */
+.metric-card, .week-day, .badge, .task-item {
+    transition: transform 0.4s var(--ease), box-shadow 0.4s var(--ease), border-color 0.4s var(--ease) !important;
+}
+.metric-card:hover, .badge:hover {
+    transform: translateY(-3px) scale(1.02);
+    border-color: rgba(0,229,160,0.12) !important;
+    box-shadow: var(--glow-teal), var(--shadow) !important;
+}
+.week-day:hover {
+    transform: translateY(-2px);
+    border-color: rgba(139,92,246,0.15) !important;
+    box-shadow: var(--glow-violet) !important;
+}
+
+/* ── Side Rail ──────────────────────────────────────────── */
+.side-rail {
+    border-right: 1px solid rgba(255,255,255,0.04) !important;
+    position: relative;
+}
+.side-rail::after {
+    content: '';
+    position: absolute; top: 0; right: 0; bottom: 0; width: 1px;
+    background: linear-gradient(180deg, rgba(0,229,160,0.15), transparent 30%, transparent 70%, rgba(139,92,246,0.08));
+    pointer-events: none;
+}
+
+/* Brand */
+.brand-block { border-bottom-color: rgba(255,255,255,0.04) !important; }
+.brand-mark {
+    background: linear-gradient(135deg, #0c0e14, var(--teal)) !important;
+    box-shadow: 0 0 24px rgba(0,229,160,0.2), inset 0 0 0 1px rgba(255,255,255,0.1) !important;
+    animation: brandPulse 4s ease-in-out infinite;
+}
+@keyframes brandPulse {
+    0%,100% { box-shadow: 0 0 16px rgba(0,229,160,0.15), inset 0 0 0 1px rgba(255,255,255,0.1); }
+    50% { box-shadow: 0 0 32px rgba(0,229,160,0.3), inset 0 0 0 1px rgba(255,255,255,0.15); }
+}
+
+/* Player card */
+.player-card {
+    border-color: rgba(255,255,255,0.04) !important;
+    background: rgba(255,255,255,0.02) !important;
+}
+.avatar {
+    background: linear-gradient(135deg, var(--violet), var(--teal)) !important;
+    box-shadow: 0 0 12px rgba(139,92,246,0.3);
+    animation: avatarGlow 3s ease-in-out infinite alternate;
+}
+@keyframes avatarGlow {
+    0% { box-shadow: 0 0 8px rgba(139,92,246,0.2); }
+    100% { box-shadow: 0 0 20px rgba(0,229,160,0.3); }
+}
+
+/* ── Nav Buttons ────────────────────────────────────────── */
+.nav-btn {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--radius) !important;
+}
+.nav-btn::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, rgba(0,229,160,0.06), rgba(139,92,246,0.04));
+    opacity: 0;
+    transition: opacity 0.3s;
+    border-radius: inherit;
+}
+.nav-btn:hover::before, .nav-btn.active::before { opacity: 1; }
+.nav-btn:hover, .nav-btn.active {
+    color: var(--ink) !important;
+    background: rgba(255,255,255,0.03) !important;
+    border-color: rgba(255,255,255,0.06) !important;
+}
+.nav-btn.active {
+    box-shadow: inset 3px 0 0 var(--teal), 0 0 20px -4px rgba(0,229,160,0.1) !important;
+}
+.nav-btn:hover { transform: translateX(3px); }
+
+/* ── Level / XP Bar ─────────────────────────────────────── */
+.level-card { border-top: 1px solid rgba(255,255,255,0.04); padding-top: 18px; }
+.xp-track {
+    background: rgba(255,255,255,0.04) !important;
+    height: 8px !important;
+    border-radius: 999px;
+    position: relative;
+    overflow: hidden;
+}
+.xp-fill {
+    background: linear-gradient(90deg, var(--violet), var(--teal), var(--blue)) !important;
+    background-size: 200% 100%;
+    animation: xpShimmer 3s ease-in-out infinite;
+    position: relative;
+}
+.xp-fill::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    animation: xpSweep 2s ease-in-out infinite;
+}
+@keyframes xpShimmer { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+@keyframes xpSweep { 0%{transform:translateX(-100%)} 100%{transform:translateX(200%)} }
+
+/* ── Streak & Stats ─────────────────────────────────────── */
+.rail-stats div {
+    border-color: rgba(255,255,255,0.04) !important;
+    background: rgba(255,255,255,0.02) !important;
+    transition: all 0.3s var(--ease);
+}
+.rail-stats div:hover {
+    border-color: rgba(0,229,160,0.12) !important;
+    background: rgba(0,229,160,0.04) !important;
+    transform: scale(1.03);
+}
+.rail-stats span {
+    background: linear-gradient(135deg, var(--teal), var(--violet));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* ── Buttons ────────────────────────────────────────────── */
+.secondary-action {
+    border-color: rgba(255,255,255,0.06) !important;
+    background: rgba(255,255,255,0.03) !important;
+    color: var(--ink) !important;
+}
+.secondary-action:hover {
+    border-color: rgba(139,92,246,0.2) !important;
+    background: rgba(139,92,246,0.06) !important;
+    transform: translateY(-1px);
+    box-shadow: var(--glow-violet);
+}
+.primary-action {
+    background: linear-gradient(135deg, var(--teal), var(--blue)) !important;
+    border: none !important;
+    box-shadow: 0 4px 16px rgba(0,229,160,0.2);
+    transition: all 0.3s var(--ease) !important;
+}
+.primary-action:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 32px rgba(0,229,160,0.3) !important;
+}
+.icon-button { background: rgba(255,255,255,0.03) !important; }
+.icon-button:hover { background: rgba(0,229,160,0.08) !important; }
+.icon-button.solid {
+    background: linear-gradient(135deg, var(--violet), var(--teal)) !important;
+    box-shadow: 0 2px 12px rgba(139,92,246,0.25);
+}
+.icon-button.solid:hover {
+    box-shadow: 0 4px 20px rgba(0,229,160,0.3) !important;
+    transform: scale(1.08);
+}
+
+/* ── Metric Cards ───────────────────────────────────────── */
+.metric-card strong {
+    background: linear-gradient(135deg, #fff, var(--teal));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* ── Day Grid ───────────────────────────────────────────── */
+.day-cell {
+    --cell-bg: rgba(255,255,255,0.02);
+    border-color: rgba(255,255,255,0.04) !important;
+    border-radius: 4px !important;
+    transition: all 0.25s var(--ease) !important;
+}
+.day-cell:hover, .day-cell:focus-visible, .day-cell.selected {
+    border-color: var(--teal) !important;
+    box-shadow: 0 0 12px rgba(0,229,160,0.15), 0 8px 20px rgba(0,0,0,0.3) !important;
+    transform: translateY(-2px) scale(1.1) !important;
+    z-index: 5;
+}
+.day-cell::before {
+    background: rgba(0,229,160,0.25) !important;
+}
+.day-cell .date-number { color: rgba(255,255,255,0.3) !important; }
+.day-cell.won {
+    --cell-bg: rgba(34,197,94,0.15) !important;
+    border-color: rgba(34,197,94,0.3) !important;
+    box-shadow: 0 0 8px rgba(34,197,94,0.1);
+}
+.day-cell.missed {
+    --cell-bg: rgba(239,68,68,0.12) !important;
+    border-color: rgba(239,68,68,0.25) !important;
+}
+.day-cell.planned {
+    --cell-bg: rgba(99,102,241,0.1) !important;
+    border-color: rgba(99,102,241,0.2) !important;
+}
+.day-cell.today {
+    box-shadow: inset 0 0 0 2px var(--amber), 0 0 16px rgba(245,158,11,0.15) !important;
+    animation: todayPulse 3s ease-in-out infinite;
+}
+@keyframes todayPulse {
+    0%,100% { box-shadow: inset 0 0 0 2px var(--amber), 0 0 8px rgba(245,158,11,0.1); }
+    50% { box-shadow: inset 0 0 0 2px var(--amber), 0 0 24px rgba(245,158,11,0.2); }
+}
+.day-cell.locked { opacity: 0.5 !important; }
+
+/* ── Day Panel ──────────────────────────────────────────── */
+.day-badge {
+    background: rgba(99,102,241,0.1) !important;
+    color: #a5b4fc !important;
+    border: 1px solid rgba(99,102,241,0.15);
+}
+.day-badge.win {
+    background: rgba(0,229,160,0.1) !important;
+    color: var(--teal) !important;
+    border-color: rgba(0,229,160,0.2);
+    box-shadow: 0 0 12px rgba(0,229,160,0.1);
+}
+.day-badge.miss {
+    background: rgba(239,68,68,0.1) !important;
+    color: #f87171 !important;
+    border-color: rgba(239,68,68,0.2);
+}
+.day-badge.locked {
+    background: rgba(255,255,255,0.03) !important;
+    color: var(--muted) !important;
+}
+
+.ring {
+    background:
+        radial-gradient(circle at center, var(--paper-strong) 58%, transparent 60%),
+        conic-gradient(var(--teal) calc(var(--progress) * 1%), rgba(255,255,255,0.04) 0) !important;
+    box-shadow: 0 0 24px rgba(0,229,160,0.1);
+    transition: all 0.6s var(--ease);
+}
+
+/* Inputs */
+.field-group input, .quest-tools input, .quest-tools select {
+    border-color: rgba(255,255,255,0.06) !important;
+    background: rgba(255,255,255,0.03) !important;
+    color: var(--ink) !important;
+}
+.field-group input:focus, .quest-tools input:focus {
+    border-color: rgba(0,229,160,0.3) !important;
+    box-shadow: 0 0 12px rgba(0,229,160,0.08);
+    outline: none;
+}
+
+/* ── Tasks ──────────────────────────────────────────────── */
+.task-item {
+    border-color: rgba(255,255,255,0.04) !important;
+    background: rgba(255,255,255,0.02) !important;
+}
+.task-item:hover {
+    border-color: rgba(139,92,246,0.12) !important;
+    transform: translateX(3px);
+    box-shadow: var(--glow-violet);
+}
+.task-item.done {
+    background: rgba(0,229,160,0.06) !important;
+    border-color: rgba(0,229,160,0.15) !important;
+}
+.task-item.done .task-title {
+    color: var(--muted) !important;
+}
+.task-check { accent-color: var(--teal) !important; }
+.task-pill {
+    background: rgba(255,255,255,0.04) !important;
+    color: var(--muted) !important;
+    border: 1px solid rgba(255,255,255,0.04);
+}
+.task-empty {
+    border-color: rgba(255,255,255,0.04) !important;
+    color: var(--muted) !important;
+}
+.delete-task { color: var(--coral) !important; }
+.delete-task:hover { background: rgba(239,68,68,0.08) !important; }
+
+/* ── Status Buttons ─────────────────────────────────────── */
+.status-button {
+    border-color: rgba(255,255,255,0.06) !important;
+    background: rgba(255,255,255,0.03) !important;
+    color: var(--ink) !important;
+    transition: all 0.3s var(--ease) !important;
+}
+.status-button.win:hover, .status-button.win.active {
+    background: var(--teal) !important;
+    border-color: var(--teal) !important;
+    color: #0c0e14 !important;
+    box-shadow: 0 0 24px rgba(0,229,160,0.25);
+    transform: scale(1.02);
+}
+.status-button.miss:hover, .status-button.miss.active {
+    background: var(--coral) !important;
+    border-color: var(--coral) !important;
+    color: white !important;
+    box-shadow: 0 0 24px rgba(239,68,68,0.2);
+}
+
+/* ── Week Strip ─────────────────────────────────────────── */
+.week-day {
+    border-color: rgba(255,255,255,0.04) !important;
+    background: rgba(255,255,255,0.02) !important;
+}
+.mini-bar { background: rgba(255,255,255,0.04) !important; }
+.mini-bar span { background: var(--teal) !important; }
+
+/* ── Badges ─────────────────────────────────────────────── */
+.badge {
+    border-color: rgba(255,255,255,0.04) !important;
+    background: rgba(255,255,255,0.02) !important;
+    transition: all 0.4s var(--ease) !important;
+}
+.badge.unlocked {
+    border-color: rgba(0,229,160,0.2) !important;
+    background: rgba(0,229,160,0.06) !important;
+    box-shadow: 0 0 16px rgba(0,229,160,0.08);
+    animation: badgeGlow 3s ease-in-out infinite alternate;
+}
+@keyframes badgeGlow {
+    0% { box-shadow: 0 0 8px rgba(0,229,160,0.05); }
+    100% { box-shadow: 0 0 24px rgba(0,229,160,0.12); }
+}
+
+/* ── Toasts ─────────────────────────────────────────────── */
+.toast {
+    border-color: rgba(0,229,160,0.15) !important;
+    background: rgba(13,15,23,0.95) !important;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03) !important;
+    animation: toastIn 0.4s var(--ease) both;
+}
+.toast.warn { border-color: rgba(245,158,11,0.2) !important; }
+.toast.error { border-color: rgba(239,68,68,0.2) !important; }
+@keyframes toastIn {
+    from { opacity:0; transform: translateX(80px) scale(0.9); }
+    to { opacity:1; transform: translateX(0) scale(1); }
+}
+
+/* ── Lock Note ──────────────────────────────────────────── */
+.lock-note {
+    background: rgba(255,255,255,0.03) !important;
+    color: var(--muted) !important;
+    border: 1px solid rgba(255,255,255,0.04);
+}
+
+/* ── Scrollbar ──────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(139,92,246,0.15); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(139,92,246,0.25); }
+
+/* ── Year Controls ──────────────────────────────────────── */
+.year-controls {
+    border-color: rgba(255,255,255,0.06) !important;
+    background: rgba(255,255,255,0.03) !important;
+}
+
+/* ── Entrance Animations ────────────────────────────────── */
+.workspace { animation: fadeUp 0.5s var(--ease) both; }
+.side-rail { animation: fadeUp 0.4s var(--ease) both; }
+.metric-card { animation: cardReveal 0.5s var(--ease) both; }
+.metric-card:nth-child(1) { animation-delay: .05s; }
+.metric-card:nth-child(2) { animation-delay: .12s; }
+.metric-card:nth-child(3) { animation-delay: .19s; }
+.metric-card:nth-child(4) { animation-delay: .26s; }
+@keyframes fadeUp {
+    from { opacity:0; transform: translateY(16px); filter: blur(4px); }
+    to { opacity:1; transform: translateY(0); filter: blur(0); }
+}
+@keyframes cardReveal {
+    from { opacity:0; transform: translateY(20px) scale(0.97); }
+    to { opacity:1; transform: translateY(0) scale(1); }
+}
+
+/* ── Board & Panel entrances ────────────────────────────── */
+.calendar-board { animation: slideLeft 0.5s var(--ease) 0.15s both; }
+.day-panel { animation: slideRight 0.5s var(--ease) 0.2s both; }
+@keyframes slideLeft {
+    from { opacity:0; transform: translateX(-20px); }
+    to { opacity:1; transform: translateX(0); }
+}
+@keyframes slideRight {
+    from { opacity:0; transform: translateX(20px); }
+    to { opacity:1; transform: translateX(0); }
+}
+
+/* ── Section titles glow ────────────────────────────────── */
+.section-title h3, .board-header h3, .panel-header h3 {
+    position: relative;
+}
+.section-title h3::after, .board-header h3::after {
+    content: '';
+    position: absolute; bottom: -4px; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, rgba(0,229,160,0.3), rgba(139,92,246,0.2), transparent);
+    animation: headerGlow 4s ease-in-out infinite alternate;
+}
+@keyframes headerGlow {
+    0% { opacity:.3; transform: scaleX(0.5); transform-origin: left; }
+    100% { opacity:.8; transform: scaleX(1); transform-origin: left; }
+}
+
+.month-label { color: var(--muted) !important; }
+.progress-ring-card { border-color: rgba(255,255,255,0.04) !important; }
+.legend { color: var(--muted) !important; }
+.legend-dot { border-color: rgba(255,255,255,0.1) !important; }
+.legend-dot.won { background: rgba(0,229,160,0.2) !important; border-color: var(--teal) !important; }
+.legend-dot.missed { background: rgba(239,68,68,0.15) !important; border-color: var(--coral) !important; }
+.legend-dot.planned { background: rgba(99,102,241,0.15) !important; border-color: var(--blue) !important; }
+.legend-dot.today { background: rgba(245,158,11,0.15) !important; border-color: var(--amber) !important; }
+
+/* ═══════════════════════════════════════════════════════════
+   GAME EFFECT ANIMATIONS
+   ═══════════════════════════════════════════════════════════ */
+
+@keyframes particleFly {
+    0% { transform: translate(-50%,-50%) rotate(var(--angle)) translateY(0) scale(1); opacity:1; }
+    100% { transform: translate(-50%,-50%) rotate(var(--angle)) translateY(calc(var(--dist) * -1)) scale(0); opacity:0; }
+}
+
+@keyframes xpFloat {
+    0% { opacity:0; transform: translateX(-50%) translateY(0) scale(0.5); }
+    20% { opacity:1; transform: translateX(-50%) translateY(-20px) scale(1.2); }
+    100% { opacity:0; transform: translateX(-50%) translateY(-80px) scale(0.8); }
+}
+
+@keyframes screenFlash {
+    0% { opacity:1; }
+    100% { opacity:0; }
+}
+
+@keyframes confettiFall {
+    0% { transform: translateY(0) rotate(0deg) scale(1); opacity:1; }
+    100% { transform: translateY(100vh) rotate(720deg) scale(0.3); opacity:0; }
+}
+
+@keyframes fadeIn { from{opacity:0} to{opacity:1} }
+
+@keyframes levelPop {
+    from { opacity:0; transform: scale(0.5) translateY(40px); }
+    to { opacity:1; transform: scale(1) translateY(0); }
+}
+
+@keyframes toastOut {
+    from { opacity:1; transform:translateX(0); }
+    to { opacity:0; transform:translateX(100px); }
+}
+
+/* Combo toast */
+.toast.combo {
+    border-color: rgba(245,158,11,0.25) !important;
+    background: linear-gradient(135deg, rgba(13,15,23,0.95), rgba(245,158,11,0.05)) !important;
+    box-shadow: 0 0 24px rgba(245,158,11,0.1) !important;
+    animation: toastIn 0.4s var(--ease) both, comboShake 0.3s ease 0.4s !important;
+}
+.toast.win {
+    border-color: rgba(0,229,160,0.25) !important;
+    background: linear-gradient(135deg, rgba(13,15,23,0.95), rgba(0,229,160,0.05)) !important;
+    box-shadow: 0 0 24px rgba(0,229,160,0.1) !important;
+}
+@keyframes comboShake {
+    0%,100% { transform:translateX(0); }
+    25% { transform:translateX(-4px); }
+    75% { transform:translateX(4px); }
+}
+
+/* ── Click ripple on interactive elements ────────────────── */
+.nav-btn:active, .status-button:active, .icon-button:active,
+.primary-action:active, .secondary-action:active {
+    transform: scale(0.97) !important;
+    transition: transform 0.1s ease !important;
+}
+
+/* ── Breathing animation for today cell ─────────────────── */
+.day-cell.today::after {
+    content: '';
+    position: absolute; inset: -2px;
+    border-radius: inherit;
+    border: 1px solid rgba(245,158,11,0.2);
+    animation: todayRing 2.5s ease-out infinite;
+    pointer-events: none;
+}
+@keyframes todayRing {
+    0% { transform:scale(1); opacity:0.6; }
+    100% { transform:scale(1.4); opacity:0; }
+}
+
+/* ── Won cell glow ──────────────────────────────────────── */
+.day-cell.won::after {
+    content: '';
+    position: absolute; inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(circle, rgba(0,229,160,0.15), transparent);
+    pointer-events: none;
+}
+
+/* ── Reduced motion ─────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0s !important;
+        transition-duration: 0s !important;
+    }
+}

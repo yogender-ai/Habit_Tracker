@@ -81,6 +81,9 @@ class DayForgeApp {
         this.firebaseReady = false;
         this.data = this.loadLocalData(this.currentUser.uid);
         this.syncTimer = null;
+        this.combo = 0;
+        this.comboTimer = null;
+        this.lastLevel = 1;
 
         this.els = {
             trackerGrid: document.getElementById("trackerGrid"),
@@ -797,15 +800,31 @@ class DayForgeApp {
         task.done = done;
         task.completedAt = done ? new Date().toISOString() : null;
 
+        if (done) {
+            this.combo += 1;
+            clearTimeout(this.comboTimer);
+            this.comboTimer = setTimeout(() => { this.combo = 0; }, 6000);
+            const xp = this.taskXp(task);
+            this.spawnXpFloat(xp);
+            this.spawnBurst();
+            if (this.combo >= 3) {
+                this.toast(`🔥 COMBO x${this.combo}! Keep going!`, "combo");
+            }
+        }
+
         const progress = this.dayProgress(day);
         if (progress.total > 0 && progress.done === progress.total) {
             day.status = "won";
+            this.flashScreen("win");
+            this.spawnConfetti();
+            this.toast("🏆 PERFECT DAY! All quests complete!", "win");
         } else if (day.status === "won") {
             day.status = "neutral";
         }
 
         this.persistDate(this.selectedDate);
         this.renderAll();
+        this.checkLevelUp();
     }
 
     deleteTask(taskId) {
@@ -1003,10 +1022,112 @@ class DayForgeApp {
         const node = document.createElement("div");
         node.className = `toast ${tone}`;
         node.textContent = message;
+        node.style.animation = 'toastIn 0.4s cubic-bezier(0.22,1,0.36,1) both';
         this.els.toastStack.appendChild(node);
         setTimeout(() => {
-            node.remove();
+            node.style.animation = 'toastOut 0.3s ease forwards';
+            setTimeout(() => node.remove(), 300);
         }, 3600);
+    }
+
+    spawnBurst() {
+        const colors = ['#00e5a0', '#8b5cf6', '#6366f1', '#f59e0b', '#22c55e'];
+        for (let i = 0; i < 8; i++) {
+            const dot = document.createElement('div');
+            dot.className = 'game-particle';
+            const angle = (i / 8) * 360;
+            const dist = 30 + Math.random() * 40;
+            dot.style.cssText = `
+                position:fixed; top:50%; left:50%; width:5px; height:5px;
+                border-radius:50%; pointer-events:none; z-index:9999;
+                background:${colors[i % colors.length]};
+                box-shadow: 0 0 6px ${colors[i % colors.length]};
+                animation: particleFly 0.7s cubic-bezier(0.22,1,0.36,1) forwards;
+                --angle:${angle}deg; --dist:${dist}px;
+            `;
+            document.body.appendChild(dot);
+            setTimeout(() => dot.remove(), 700);
+        }
+    }
+
+    spawnXpFloat(xp) {
+        const el = document.createElement('div');
+        el.className = 'xp-float';
+        el.textContent = `+${xp} XP`;
+        el.style.cssText = `
+            position:fixed; top:45%; left:50%; transform:translateX(-50%);
+            font-family:Inter,sans-serif; font-size:24px; font-weight:900;
+            color:#00e5a0; text-shadow:0 0 16px rgba(0,229,160,0.5);
+            pointer-events:none; z-index:9999;
+            animation: xpFloat 1.2s cubic-bezier(0.22,1,0.36,1) forwards;
+        `;
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 1200);
+    }
+
+    flashScreen(type) {
+        const overlay = document.createElement('div');
+        const color = type === 'win' ? 'rgba(0,229,160,0.08)' : 'rgba(239,68,68,0.06)';
+        overlay.style.cssText = `
+            position:fixed; inset:0; z-index:9998; pointer-events:none;
+            background:${color}; animation: screenFlash 0.6s ease forwards;
+        `;
+        document.body.appendChild(overlay);
+        setTimeout(() => overlay.remove(), 600);
+    }
+
+    spawnConfetti() {
+        const colors = ['#00e5a0','#8b5cf6','#f59e0b','#6366f1','#22c55e','#ef4444','#06b6d4'];
+        for (let i = 0; i < 30; i++) {
+            const piece = document.createElement('div');
+            const x = 30 + Math.random() * 40;
+            const delay = Math.random() * 0.4;
+            piece.style.cssText = `
+                position:fixed; top:-10px; left:${x}%; z-index:9999;
+                width:${4 + Math.random()*6}px; height:${4 + Math.random()*6}px;
+                background:${colors[i % colors.length]};
+                border-radius:${Math.random()>0.5?'50%':'2px'};
+                pointer-events:none; opacity:0.9;
+                animation: confettiFall ${1.5+Math.random()}s ease ${delay}s forwards;
+            `;
+            document.body.appendChild(piece);
+            setTimeout(() => piece.remove(), 2500);
+        }
+    }
+
+    checkLevelUp() {
+        const stats = this.calculateStats();
+        if (stats.level > this.lastLevel) {
+            this.lastLevel = stats.level;
+            this.showLevelUp(stats.level);
+        }
+    }
+
+    showLevelUp(level) {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            position:fixed; inset:0; z-index:10000;
+            display:grid; place-items:center;
+            background:rgba(5,8,17,0.85); backdrop-filter:blur(20px);
+            animation: fadeIn 0.3s ease;
+        `;
+        overlay.innerHTML = `
+            <div style="text-align:center; animation:levelPop 0.6s cubic-bezier(0.34,1.56,0.64,1) both;">
+                <div style="font-size:64px; margin-bottom:12px; filter:drop-shadow(0 0 20px rgba(0,229,160,0.5));">⚡</div>
+                <h2 style="font-family:Inter,sans-serif; font-size:28px; font-weight:900;
+                    letter-spacing:0.1em; margin:0 0 8px;
+                    background:linear-gradient(135deg,#fff,#00e5a0,#8b5cf6);
+                    -webkit-background-clip:text; -webkit-text-fill-color:transparent;">LEVEL UP!</h2>
+                <p style="color:#7a8599; font-size:18px; font-weight:700; margin:0 0 24px;">Level ${level}</p>
+                <button onclick="this.closest('div').parentElement.remove()" style="
+                    padding:12px 32px; border:1px solid rgba(0,229,160,0.3); border-radius:10px;
+                    background:linear-gradient(135deg,rgba(0,229,160,0.1),rgba(139,92,246,0.1));
+                    color:#fff; font-weight:800; font-size:13px; cursor:pointer;
+                ">CONTINUE</button>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        setTimeout(() => { if (overlay.parentNode) overlay.remove(); }, 8000);
     }
 }
 
