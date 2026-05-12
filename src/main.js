@@ -528,12 +528,26 @@ class DayForgeApp {
         });
         const todayDay = this.getDay(this.todayKey, false);
         const progress = this.dayProgress(todayDay);
+        const stats = this.calculateStats();
+        const hour = today.getHours();
         if (!todayDay || progress.total === 0) {
-            this.els.headlineText.textContent = "Forge one clean win.";
+            const lines = hour < 12
+                ? ["Good morning, champion. Set your quests.", "Rise and grind. What will you conquer?", "New day, new power. Add your quests."]
+                : hour < 17
+                    ? ["Afternoon forge. Build something great.", "Half the day left. Make it count."]
+                    : ["Evening session. Still time to win.", "Night ops active. Forge ahead."];
+            this.els.headlineText.textContent = lines[Math.floor(Math.random() * lines.length)];
         } else if (this.isValidWin(todayDay)) {
-            this.els.headlineText.textContent = "Today is sealed as a win.";
+            const winLines = ["🏆 Today is sealed. You crushed it.", "⚡ Perfect day. Absolute legend.", "🔥 All quests done. Unstoppable."];
+            this.els.headlineText.textContent = winLines[Math.floor(Math.random() * winLines.length)];
         } else {
-            this.els.headlineText.textContent = `${progress.done} of ${progress.total} quests complete.`;
+            const pct = progress.pct;
+            if (pct >= 75) this.els.headlineText.textContent = `Almost there! ${progress.done}/${progress.total} — finish strong 💪`;
+            else if (pct >= 50) this.els.headlineText.textContent = `${progress.done} of ${progress.total} done. Keep the momentum.`;
+            else this.els.headlineText.textContent = `${progress.done} of ${progress.total} quests. Let's go! 🎯`;
+        }
+        if (stats.streak >= 3) {
+            this.els.todayLabel.textContent += ` • 🔥 ${stats.streak} day streak!`;
         }
     }
 
@@ -893,6 +907,13 @@ class DayForgeApp {
         this.persistDate(this.selectedDate);
         this.renderAll();
         this.els.newTaskInput.focus();
+        const p = this.els.newTaskPriority.value;
+        const addMsgs = {
+            high: "⚔️ Boss quest accepted! Big XP incoming.",
+            medium: "🎯 Core quest locked in.",
+            low: "✅ Small quest added. Every bit counts!"
+        };
+        this.toast(addMsgs[p] || "Quest added!");
     }
 
     toggleTask(taskId, done) {
