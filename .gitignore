@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.env
+.env.*
+!.env.example
+dayforge_local.db
+node_modules/
+dist/
+.vercel/
+.DS_Store

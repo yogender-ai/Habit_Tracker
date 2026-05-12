@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#f7f2e8">
+    <title>DayForge</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/config.js"></script>
+    <script type="module" src="/src/main.js"></script>
+</head>
+
+<body>
+    <div class="app-shell">
+        <aside class="side-rail" aria-label="DayForge navigation">
+            <div class="brand-block">
+                <div class="brand-mark" aria-hidden="true">
+                    <svg viewBox="0 0 40 40" role="img">
+                        <path d="M20 4L34 11.5V28.5L20 36L6 28.5V11.5L20 4Z"></path>
+                        <path d="M20 11L28 15.2V24.8L20 29L12 24.8V15.2L20 11Z"></path>
+                        <path d="M20 4V11M34 11.5L28 15.2M6 11.5L12 15.2M20 36V29"></path>
+                    </svg>
+                </div>
+                <div>
+                    <p class="eyebrow">Habit game</p>
+                    <h1>DayForge</h1>
+                </div>
+            </div>
+
+            <div class="player-card">
+                <div class="avatar" id="userAvatar">DF</div>
+                <div>
+                    <p class="player-name" id="userName">Local player</p>
+                    <p class="sync-state" id="syncState">Local save ready</p>
+                </div>
+            </div>
+
+            <nav class="rail-nav" aria-label="Views">
+                <button class="nav-btn active" type="button" data-panel="year">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5v-13Z"></path>
+                        <path d="M8 4v16M16 4v16M4 8h16M4 16h16"></path>
+                    </svg>
+                    Year
+                </button>
+                <button class="nav-btn" type="button" data-jump-today>
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 3l2.7 5.6 6.2.9-4.5 4.4 1.1 6.1L12 17.1 6.5 20l1.1-6.1-4.5-4.4 6.2-.9L12 3Z"></path>
+                    </svg>
+                    Today
+                </button>
+                <button class="nav-btn" type="button" data-open-auth>
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"></path>
+                        <path d="M4 21a8 8 0 0 1 16 0"></path>
+                    </svg>
+                    Account
+                </button>
+            </nav>
+
+            <div class="level-card">
+                <div class="level-topline">
+                    <span>Level <strong id="levelNumber">1</strong></span>
+                    <span id="xpLabel">0 / 500 XP</span>
+                </div>
+                <div class="xp-track" aria-hidden="true">
+                    <div class="xp-fill" id="xpFill"></div>
+                </div>
+            </div>
+
+            <div class="rail-stats">
+                <div>
+                    <span id="streakCount">0</span>
+                    <p>Streak</p>
+                </div>
+                <div>
+                    <span id="bestStreakCount">0</span>
+                    <p>Best</p>
+                </div>
+            </div>
+
+            <div class="rail-actions">
+                <button class="secondary-action" type="button" id="syncNowBtn">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M21 12a9 9 0 0 1-15.3 6.4"></path>
+                        <path d="M3 12A9 9 0 0 1 18.3 5.6"></path>
+                        <path d="M18 2v4h-4M6 22v-4h4"></path>
+                    </svg>
+                    Sync
+                </button>
+                <button class="primary-action" type="button" id="authButton">Sign in</button>
+            </div>
+        </aside>
+
+        <main class="workspace">
+            <header class="top-bar">
+                <div>
+                    <p class="eyebrow" id="todayLabel">Today</p>
+                    <h2 id="headlineText">Forge one clean win.</h2>
+                </div>
+                <div class="year-controls">
+                    <button class="icon-button" type="button" id="prevYear" aria-label="Previous year">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M15 18l-6-6 6-6"></path>
+                        </svg>
+                    </button>
+                    <span id="currentYearDisplay">2026</span>
+                    <button class="icon-button" type="button" id="nextYear" aria-label="Next year">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M9 18l6-6-6-6"></path>
+                        </svg>
+                    </button>
+                </div>
+            </header>
+
+            <section class="metric-grid" aria-label="Year summary">
+                <article class="metric-card">
+                    <p>Completion</p>
+                    <strong id="completionMetric">0%</strong>
+                    <span id="completionSubtext">0 wins this year</span>
+                </article>
+                <article class="metric-card">
+                    <p>Today XP</p>
+                    <strong id="todayXpMetric">0</strong>
+                    <span id="todayXpSubtext">Finish quests to score</span>
+                </article>
+                <article class="metric-card">
+                    <p>Perfect days</p>
+                    <strong id="perfectDaysMetric">0</strong>
+                    <span id="perfectDaysSubtext">All tasks done</span>
+                </article>
+                <article class="metric-card">
+                    <p>Lock rule</p>
+                    <strong id="lockRuleMetric">On</strong>
+                    <span>Past progress is sealed</span>
+                </article>
+            </section>
+
+            <section class="main-grid">
+                <article class="calendar-board">
+                    <div class="board-header">
+                        <div>
+                            <p class="eyebrow">Annual field</p>
+                            <h3>Quest Map</h3>
+                        </div>
+                        <div class="legend">
+                            <span><i class="legend-dot won"></i>Won</span>
+                            <span><i class="legend-dot missed"></i>Missed</span>
+                            <span><i class="legend-dot planned"></i>Planned</span>
+                            <span><i class="legend-dot today"></i>Today</span>
+                        </div>
+                    </div>
+                    <div class="tracker-grid" id="trackerGrid" aria-label="Year day grid"></div>
+                </article>
+
+                <aside class="day-panel" aria-label="Selected day details">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow" id="panelKicker">Selected day</p>
+                            <h3 id="panelDateTitle">Today</h3>
+                        </div>
+                        <span class="day-badge" id="dayStateBadge">Ready</span>
+                    </div>
+
+                    <div class="progress-ring-card">
+                        <div class="ring" id="progressRing" style="--progress: 0">
+                            <span id="progressNumber">0%</span>
+                        </div>
+                        <div>
+                            <p class="panel-label">Daily score</p>
+                            <strong id="panelXp">0 XP</strong>
+                            <span id="panelProgressText">No quests yet</span>
+                        </div>
+                    </div>
+
+                    <div class="field-group">
+                        <label for="motivationInput">Focus line</label>
+                        <input id="motivationInput" type="text" maxlength="120"
+                            placeholder="What makes this day worth winning?">
+                    </div>
+
+                    <div class="quest-tools">
+                        <input id="newTaskInput" type="text" maxlength="90" placeholder="Add a quest">
+                        <select id="newTaskPriority" aria-label="Quest priority">
+                            <option value="medium">Core</option>
+                            <option value="high">Boss</option>
+                            <option value="low">Small</option>
+                        </select>
+                        <button id="addTaskBtn" class="icon-button solid" type="button" aria-label="Add quest">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M12 5v14M5 12h14"></path>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="task-list" id="panelTaskList"></div>
+
+                    <div class="panel-actions">
+                        <button id="btnWon" class="status-button win" type="button">Claim win</button>
+                        <button id="btnMissed" class="status-button miss" type="button">Mark missed</button>
+                    </div>
+
+                    <div class="lock-note" id="lockNote" hidden>
+                        This day is locked. You can review it, but progress cannot be changed.
+                    </div>
+                </aside>
+            </section>
+
+            <section class="bottom-grid">
+                <article class="insight-panel">
+                    <div class="section-title">
+                        <p class="eyebrow">Momentum</p>
+                        <h3>Last 7 days</h3>
+                    </div>
+                    <div class="week-strip" id="weekStrip"></div>
+                </article>
+
+                <article class="insight-panel">
+                    <div class="section-title">
+                        <p class="eyebrow">Rewards</p>
+                        <h3>Badges</h3>
+                    </div>
+                    <div class="badge-grid" id="badgeGrid"></div>
+                </article>
+            </section>
+        </main>
+    </div>
+
+    <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+</body>
+
+</html>
