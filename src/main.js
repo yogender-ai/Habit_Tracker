@@ -93,6 +93,67 @@ function safeJson(value, fallback) {
     }
 }
 
+/* ── Sound Engine — satisfying micro-sounds ── */
+class SoundFX {
+    constructor() {
+        this.ctx = null;
+        this.enabled = true;
+    }
+    init() {
+        if (this.ctx) return;
+        try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { this.enabled = false; }
+    }
+    play(type) {
+        if (!this.enabled || !this.ctx) return;
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        gain.gain.setValueAtTime(0.08, t);
+        if (type === 'check') {
+            osc.frequency.setValueAtTime(880, t);
+            osc.frequency.exponentialRampToValueAtTime(1320, t + 0.08);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+            osc.start(t); osc.stop(t + 0.15);
+        } else if (type === 'uncheck') {
+            osc.frequency.setValueAtTime(440, t);
+            osc.frequency.exponentialRampToValueAtTime(330, t + 0.08);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+            osc.start(t); osc.stop(t + 0.1);
+        } else if (type === 'add') {
+            osc.frequency.setValueAtTime(660, t);
+            osc.frequency.exponentialRampToValueAtTime(990, t + 0.06);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+            osc.start(t); osc.stop(t + 0.12);
+        } else if (type === 'win') {
+            osc.frequency.setValueAtTime(523, t);
+            osc.frequency.setValueAtTime(659, t + 0.1);
+            osc.frequency.setValueAtTime(784, t + 0.2);
+            osc.frequency.setValueAtTime(1047, t + 0.3);
+            gain.gain.setValueAtTime(0.1, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+            osc.start(t); osc.stop(t + 0.5);
+        } else if (type === 'levelup') {
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(440, t);
+            osc.frequency.setValueAtTime(554, t + 0.12);
+            osc.frequency.setValueAtTime(659, t + 0.24);
+            osc.frequency.setValueAtTime(880, t + 0.36);
+            gain.gain.setValueAtTime(0.06, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+            osc.start(t); osc.stop(t + 0.6);
+        } else if (type === 'combo') {
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(1200, t);
+            osc.frequency.exponentialRampToValueAtTime(1800, t + 0.05);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+            osc.start(t); osc.stop(t + 0.1);
+        }
+    }
+}
+const sfx = new SoundFX();
+
 class DayForgeApp {
     constructor() {
         this.config = CONFIG;
@@ -156,7 +217,14 @@ class DayForgeApp {
             quoteAuthor: document.getElementById("quoteAuthor"),
             quoteBanner: document.getElementById("quoteBanner"),
             weeklyBarChart: document.getElementById("weeklyBarChart"),
-            questRanking: document.getElementById("questRanking")
+            questRanking: document.getElementById("questRanking"),
+            streakDanger: document.getElementById("streakDanger"),
+            streakDangerText: document.getElementById("streakDangerText"),
+            streakCountdown: document.getElementById("streakCountdown"),
+            nextUnlock: document.getElementById("nextUnlock"),
+            nextUnlockText: document.getElementById("nextUnlockText"),
+            nextUnlockFill: document.getElementById("nextUnlockFill"),
+            nextUnlockSub: document.getElementById("nextUnlockSub")
         };
 
         this.init();
@@ -164,9 +232,12 @@ class DayForgeApp {
 
     async init() {
         this.bindEvents();
+        document.addEventListener('click', () => sfx.init(), { once: true });
         await this.initAuth();
         await this.syncFromCloud({ quiet: true });
         this.renderAll();
+        // Update streak countdown every 60s — keeps urgency alive
+        setInterval(() => this.renderStreakDanger(), 60000);
     }
 
     bindEvents() {
@@ -516,6 +587,8 @@ class DayForgeApp {
         this.renderQuote();
         this.renderBarChart();
         this.renderQuestRanking();
+        this.renderStreakDanger();
+        this.renderNextUnlock();
         this.updateAuthUi();
     }
 
@@ -795,6 +868,77 @@ class DayForgeApp {
         });
     }
 
+    renderStreakDanger() {
+        if (!this.els.streakDanger) return;
+        const stats = this.calculateStats();
+        const todayDay = this.getDay(this.todayKey, false);
+        const todayProgress = this.dayProgress(todayDay);
+
+        // Show danger if user has an active streak but hasn't completed today
+        if (stats.streak >= 1 && todayProgress.pct < 100) {
+            this.els.streakDanger.hidden = false;
+
+            // Calculate time until midnight
+            const now = new Date();
+            const midnight = new Date(now);
+            midnight.setHours(23, 59, 59, 999);
+            const msLeft = midnight - now;
+            const hoursLeft = Math.floor(msLeft / 3600000);
+            const minsLeft = Math.floor((msLeft % 3600000) / 60000);
+
+            if (stats.streak >= 7) {
+                this.els.streakDangerText.textContent = `${stats.streak}-day streak at risk!`;
+            } else if (stats.streak >= 3) {
+                this.els.streakDangerText.textContent = `Don't lose your ${stats.streak}-day streak!`;
+            } else {
+                this.els.streakDangerText.textContent = `Keep your streak alive!`;
+            }
+
+            if (hoursLeft > 0) {
+                this.els.streakCountdown.textContent = `${hoursLeft}h ${minsLeft}m until midnight`;
+            } else {
+                this.els.streakCountdown.textContent = `Only ${minsLeft} minutes left!`;
+                this.els.streakDanger.classList.add('urgent');
+            }
+        } else {
+            this.els.streakDanger.hidden = true;
+            this.els.streakDanger.classList.remove('urgent');
+        }
+    }
+
+    renderNextUnlock() {
+        if (!this.els.nextUnlock) return;
+        const stats = this.calculateStats();
+        const badges = this.buildBadges();
+
+        // Find the next locked badge that's closest to being unlocked
+        const nearMisses = badges
+            .filter(b => !b.unlocked)
+            .map(b => {
+                let progress = 0, target = 1;
+                if (b.title === 'Chain Three') { progress = stats.streak; target = 3; }
+                else if (b.title === 'Chain Seven') { progress = stats.streak; target = 7; }
+                else if (b.title === 'Chain Fourteen') { progress = stats.streak; target = 14; }
+                else if (b.title === 'First Blood') { progress = stats.wonDays; target = 1; }
+                else if (b.title === 'Boss Slayer') { progress = this.hasCompletedBossQuest() ? 1 : 0; target = 1; }
+                else if (b.title === 'Centurion') { progress = stats.totalXp; target = 10000; }
+                else { return null; }
+                return { ...b, progress, target, pct: Math.min(Math.round((progress / target) * 100), 99) };
+            })
+            .filter(b => b && b.pct > 0 && b.pct < 100)
+            .sort((a, b) => b.pct - a.pct);
+
+        if (nearMisses.length > 0) {
+            const next = nearMisses[0];
+            this.els.nextUnlock.hidden = false;
+            this.els.nextUnlockText.textContent = `${next.icon} ${next.title}`;
+            this.els.nextUnlockFill.style.width = `${next.pct}%`;
+            this.els.nextUnlockSub.textContent = `${next.progress} / ${next.target} — ${100 - next.pct}% to go`;
+        } else {
+            this.els.nextUnlock.hidden = true;
+        }
+    }
+
     renderQuote() {
         if (!this.els.quoteText) return;
         const idx = Math.floor((Date.now() / 86400000)) % WIN_QUOTES.length;
@@ -907,6 +1051,7 @@ class DayForgeApp {
         this.persistDate(this.selectedDate);
         this.renderAll();
         this.els.newTaskInput.focus();
+        sfx.play('add');
         const p = this.els.newTaskPriority.value;
         const addMsgs = {
             high: "⚔️ Boss quest accepted! Big XP incoming.",
@@ -939,9 +1084,20 @@ class DayForgeApp {
             const xp = this.taskXp(task);
             this.spawnXpFloat(xp);
             this.spawnBurst();
+            sfx.play('check');
+            // Variable reward — random bonus XP (slot machine effect)
+            if (Math.random() < 0.15) {
+                const bonus = [10, 15, 20, 25][Math.floor(Math.random() * 4)];
+                this.spawnXpFloat(bonus);
+                sfx.play('combo');
+                this.toast(`✨ BONUS +${bonus} XP! Lucky strike!`, "combo");
+            }
             if (this.combo >= 3) {
+                sfx.play('combo');
                 this.toast(`🔥 COMBO x${this.combo}! Keep going!`, "combo");
             }
+        } else {
+            sfx.play('uncheck');
         }
 
         const progress = this.dayProgress(day);
@@ -949,6 +1105,7 @@ class DayForgeApp {
             day.status = "won";
             this.flashScreen("win");
             this.spawnConfetti();
+            sfx.play('win');
             this.toast("🏆 PERFECT DAY! All quests complete!", "win");
         } else if (day.status === "won") {
             day.status = "neutral";
@@ -1231,6 +1388,7 @@ class DayForgeApp {
         const stats = this.calculateStats();
         if (stats.level > this.lastLevel) {
             this.lastLevel = stats.level;
+            sfx.play('levelup');
             this.showLevelUp(stats.level);
         }
     }
