@@ -1,0 +1,148 @@
+/* DayForge — Premium Theme Part 2 */
+
+/* ── Status Buttons ─────────────────────── */
+.status-button{border-color:rgba(255,255,255,0.06)!important;background:rgba(255,255,255,0.04)!important;color:var(--ink)!important;border-radius:12px!important;transition:all .2s var(--ease)!important}
+.status-button.win:hover,.status-button.win.active{background:var(--mint)!important;border-color:var(--mint)!important;color:#111!important;box-shadow:none!important;transform:none}
+.status-button.miss:hover,.status-button.miss.active{background:var(--red)!important;border-color:var(--red)!important;color:#fff!important;box-shadow:none!important}
+
+/* ── Week Strip ─────────────────────────── */
+.week-day{border-color:rgba(255,255,255,0.04)!important;background:rgba(255,255,255,0.025)!important;border-radius:12px!important;transition:all .15s var(--ease)!important}
+.week-day:hover{border-color:rgba(255,255,255,0.08)!important;transform:none;box-shadow:none!important}
+.mini-bar{background:rgba(255,255,255,0.06)!important;border-radius:999px}
+.mini-bar span{background:var(--mint)!important}
+
+/* ── Badges ─────────────────────────────── */
+.badge{border-color:rgba(255,255,255,0.04)!important;background:rgba(255,255,255,0.025)!important;border-radius:12px!important;transition:all .15s var(--ease)!important}
+.badge:hover{border-color:rgba(255,255,255,0.08)!important;transform:none;box-shadow:none!important}
+.badge.unlocked{border-color:rgba(48,209,88,0.15)!important;background:rgba(48,209,88,0.04)!important;animation:none!important}
+.badge.unlocked strong{color:var(--mint)}
+
+/* ── Toast ──────────────────────────────── */
+.toast{
+  border:1px solid rgba(255,255,255,0.08)!important;
+  background:rgba(30,30,32,0.98)!important;
+  backdrop-filter:blur(20px);
+  box-shadow:0 8px 32px rgba(0,0,0,0.4)!important;
+  border-radius:14px!important;
+  padding:14px 18px!important;
+  font-size:.88rem;
+  animation:toastSlide .35s var(--ease) both;
+}
+.toast.warn{border-left:3px solid var(--orange)!important}
+.toast.error{border-left:3px solid var(--red)!important}
+.toast.combo{border-left:3px solid var(--orange)!important;background:rgba(30,30,32,0.98)!important;box-shadow:0 8px 32px rgba(0,0,0,0.4)!important;animation:toastSlide .35s var(--ease) both!important}
+.toast.win{border-left:3px solid var(--mint)!important;background:rgba(30,30,32,0.98)!important;box-shadow:0 8px 32px rgba(0,0,0,0.4)!important}
+@keyframes toastSlide{from{opacity:0;transform:translateY(12px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes toastOut{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-8px)}}
+
+/* ── Lock Note ──────────────────────────── */
+.lock-note{background:rgba(255,255,255,0.03)!important;color:var(--muted)!important;border:1px solid rgba(255,255,255,0.04);border-radius:12px}
+
+/* ── Scrollbar ──────────────────────────── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.08);border-radius:6px}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.14)}
+
+/* ── Section Headers ────────────────────── */
+.section-title h3,.board-header h3,.panel-header h3{font-weight:800;letter-spacing:-0.02em}
+.section-title h3::after,.board-header h3::after{display:none}
+.month-label{color:var(--muted)!important}
+.legend{color:var(--muted)!important}
+.legend-dot{border-color:rgba(255,255,255,0.1)!important;border-radius:3px}
+.legend-dot.won{background:rgba(48,209,88,0.2)!important;border-color:var(--mint)!important}
+.legend-dot.missed{background:rgba(255,69,58,0.12)!important;border-color:var(--red)!important}
+.legend-dot.planned{background:rgba(94,92,230,0.12)!important;border-color:var(--indigo)!important}
+.legend-dot.today{background:rgba(255,159,10,0.12)!important;border-color:var(--orange)!important}
+
+/* ── Quote Banner ───────────────────────── */
+.quote-banner{
+  margin:18px 0;padding:32px;border-radius:20px;
+  border:1px solid rgba(255,255,255,0.05);
+  background:rgba(255,255,255,0.025);
+  text-align:center;position:relative;overflow:hidden;
+  animation:none!important;
+}
+.quote-banner::before{display:none}
+.quote-icon{font-size:28px;margin-bottom:14px;filter:none!important;animation:none!important}
+.quote-banner blockquote{
+  margin:0 0 10px;font-size:1.15rem;font-weight:700;line-height:1.5;
+  color:var(--ink)!important;background:none!important;
+  -webkit-text-fill-color:var(--ink)!important;
+  letter-spacing:-0.01em;
+}
+.quote-banner cite{color:var(--muted);font-size:.8rem;font-weight:600;font-style:normal}
+
+/* ── Bar Chart ──────────────────────────── */
+.bar-chart{
+  display:grid;grid-template-columns:repeat(7,1fr);gap:10px;
+  align-items:end;height:180px;margin-top:16px;padding:8px 0;
+}
+.bar-col{display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;cursor:pointer;transition:opacity .15s}
+.bar-col:hover{opacity:.8}
+.bar-pct{font-size:.68rem;font-weight:700;color:var(--muted);min-height:16px}
+.bar-fill{
+  width:100%;max-width:32px;min-height:3px;border-radius:6px;
+  background:var(--indigo);margin-top:auto;
+  transition:height .4s var(--ease);
+}
+.bar-fill::after{display:none}
+.bar-fill.bar-perfect{background:var(--mint)!important}
+.bar-fill.bar-good{background:var(--blue)!important}
+.bar-label{font-size:.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+.bar-count{font-size:.62rem;font-weight:600;color:rgba(255,255,255,0.15)}
+
+/* ── Quest Ranking ──────────────────────── */
+.quest-ranking{margin-top:14px;display:flex;flex-direction:column;gap:6px}
+.rank-empty{color:var(--muted);font-weight:700;text-align:center;padding:28px 0;font-size:.88rem}
+.rank-row{
+  display:grid;grid-template-columns:30px 1fr 44px;gap:10px;
+  align-items:center;padding:10px 14px;border-radius:12px;
+  border:1px solid rgba(255,255,255,0.04);background:rgba(255,255,255,0.02);
+  transition:all .15s var(--ease);
+}
+.rank-row:hover{background:rgba(255,255,255,0.04)}
+.rank-num{
+  width:26px;height:26px;display:grid;place-items:center;border-radius:8px;
+  font-size:.74rem;font-weight:800;
+  background:rgba(255,255,255,0.05);color:var(--muted);border:none;
+}
+.rank-row:first-child .rank-num{background:rgba(48,209,88,0.08);color:var(--mint);box-shadow:none}
+.rank-info strong{display:block;font-size:.82rem;font-weight:700;margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rank-bar-track{height:4px;border-radius:999px;background:rgba(255,255,255,0.05);overflow:hidden}
+.rank-bar-fill{height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--indigo),var(--mint));transition:width .4s var(--ease)}
+.rank-pct{font-size:.8rem;font-weight:800;color:var(--mint);text-align:right}
+
+/* ── Game Effects ───────────────────────── */
+@keyframes particleFly{
+  0%{transform:translate(-50%,-50%) rotate(var(--angle)) translateY(0) scale(1);opacity:1}
+  100%{transform:translate(-50%,-50%) rotate(var(--angle)) translateY(calc(var(--dist) * -1)) scale(0);opacity:0}
+}
+@keyframes xpFloat{
+  0%{opacity:0;transform:translateX(-50%) translateY(0) scale(.6)}
+  20%{opacity:1;transform:translateX(-50%) translateY(-16px) scale(1.1)}
+  100%{opacity:0;transform:translateX(-50%) translateY(-60px) scale(.9)}
+}
+@keyframes screenFlash{0%{opacity:1}100%{opacity:0}}
+@keyframes confettiFall{
+  0%{transform:translateY(0) rotate(0) scale(1);opacity:1}
+  100%{transform:translateY(100vh) rotate(720deg) scale(.3);opacity:0}
+}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes levelPop{from{opacity:0;transform:scale(.6) translateY(30px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes comboShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+
+/* ── Click feedback ─────────────────────── */
+.nav-btn:active,.status-button:active,.icon-button:active,.primary-action:active,.secondary-action:active{
+  transform:scale(.97)!important;transition:transform 80ms!important;
+}
+
+/* ── Responsive ─────────────────────────── */
+@media(max-width:1180px){
+  .side-rail{border-radius:14px!important}
+  .workspace{border-radius:14px!important}
+}
+
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:0s!important;transition-duration:0s!important}
+}
