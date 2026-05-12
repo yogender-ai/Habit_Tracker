@@ -35,6 +35,31 @@ const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "
 const XP_BY_PRIORITY = { low: 20, medium: 35, high: 55 };
 const PRIORITY_LABELS = { low: "Small", medium: "Core", high: "Boss" };
 
+const WIN_QUOTES = [
+    { text: "Trust the process.", author: "DayForge" },
+    { text: "The secret of getting ahead is getting started.", author: "Mark Twain" },
+    { text: "Small daily improvements are the key to staggering long-term results.", author: "Robin Sharma" },
+    { text: "We are what we repeatedly do. Excellence is not an act, but a habit.", author: "Aristotle" },
+    { text: "Don't count the days, make the days count.", author: "Muhammad Ali" },
+    { text: "Success is the sum of small efforts repeated day in and day out.", author: "Robert Collier" },
+    { text: "Discipline is choosing between what you want now and what you want most.", author: "Abraham Lincoln" },
+    { text: "The only way to do great work is to love what you do.", author: "Steve Jobs" },
+    { text: "You don't have to be extreme, just consistent.", author: "DayForge" },
+    { text: "A year from now you'll wish you started today.", author: "Karen Lamb" },
+    { text: "Winners are not people who never fail but people who never quit.", author: "Edwin Louis Cole" },
+    { text: "Progress, not perfection.", author: "DayForge" },
+    { text: "It does not matter how slowly you go as long as you do not stop.", author: "Confucius" },
+    { text: "Motivation gets you going. Habit keeps you growing.", author: "John C. Maxwell" },
+    { text: "Be stronger than your excuses.", author: "DayForge" },
+    { text: "Fall seven times, stand up eight.", author: "Japanese Proverb" },
+    { text: "Your future self will thank you.", author: "DayForge" },
+    { text: "One day or day one. You decide.", author: "Paulo Coelho" },
+    { text: "The hard days are what make you stronger.", author: "Aly Raisman" },
+    { text: "Consistency beats intensity.", author: "DayForge" },
+];
+
+const QUOTE_ICONS = ['💎', '🔥', '⚡', '🏆', '🎯', '💪', '🌟', '🚀', '✨', '👑'];
+
 function toDateKey(date) {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -126,7 +151,12 @@ class DayForgeApp {
             lockNote: document.getElementById("lockNote"),
             weekStrip: document.getElementById("weekStrip"),
             badgeGrid: document.getElementById("badgeGrid"),
-            toastStack: document.getElementById("toastStack")
+            toastStack: document.getElementById("toastStack"),
+            quoteText: document.getElementById("quoteText"),
+            quoteAuthor: document.getElementById("quoteAuthor"),
+            quoteBanner: document.getElementById("quoteBanner"),
+            weeklyBarChart: document.getElementById("weeklyBarChart"),
+            questRanking: document.getElementById("questRanking")
         };
 
         this.init();
@@ -483,6 +513,9 @@ class DayForgeApp {
         this.renderStats();
         this.renderWeek();
         this.renderBadges();
+        this.renderQuote();
+        this.renderBarChart();
+        this.renderQuestRanking();
         this.updateAuthUi();
     }
 
@@ -745,6 +778,84 @@ class DayForgeApp {
 
             node.append(title, desc);
             this.els.badgeGrid.appendChild(node);
+        });
+    }
+
+    renderQuote() {
+        if (!this.els.quoteText) return;
+        const idx = Math.floor((Date.now() / 86400000)) % WIN_QUOTES.length;
+        const q = WIN_QUOTES[idx];
+        const iconIdx = idx % QUOTE_ICONS.length;
+        this.els.quoteText.textContent = q.text;
+        this.els.quoteAuthor.textContent = `— ${q.author}`;
+        const iconEl = this.els.quoteBanner?.querySelector('.quote-icon');
+        if (iconEl) iconEl.textContent = QUOTE_ICONS[iconIdx];
+    }
+
+    renderBarChart() {
+        if (!this.els.weeklyBarChart) return;
+        this.els.weeklyBarChart.innerHTML = '';
+        const today = parseDateKey(this.todayKey);
+        for (let i = 6; i >= 0; i--) {
+            const date = addDays(today, -i);
+            const dateKey = toDateKey(date);
+            const day = this.getDay(dateKey, false);
+            const progress = this.dayProgress(day);
+            const col = document.createElement('div');
+            col.className = 'bar-col';
+            const bar = document.createElement('div');
+            bar.className = 'bar-fill';
+            bar.style.height = `${progress.pct}%`;
+            if (progress.pct >= 100) bar.classList.add('bar-perfect');
+            else if (progress.pct >= 50) bar.classList.add('bar-good');
+            const pct = document.createElement('span');
+            pct.className = 'bar-pct';
+            pct.textContent = `${progress.pct}%`;
+            const label = document.createElement('span');
+            label.className = 'bar-label';
+            label.textContent = date.toLocaleDateString('en-US', { weekday: 'short' });
+            const count = document.createElement('span');
+            count.className = 'bar-count';
+            count.textContent = `${progress.done}/${progress.total}`;
+            col.append(pct, bar, label, count);
+            col.addEventListener('click', () => this.selectDate(dateKey));
+            this.els.weeklyBarChart.appendChild(col);
+        }
+    }
+
+    renderQuestRanking() {
+        if (!this.els.questRanking) return;
+        const questMap = {};
+        Object.values(this.data).forEach(day => {
+            day.tasks.forEach(task => {
+                const key = task.text.toLowerCase().trim();
+                if (!questMap[key]) questMap[key] = { text: task.text, done: 0, total: 0, priority: task.priority };
+                questMap[key].total++;
+                if (task.done) questMap[key].done++;
+            });
+        });
+        const sorted = Object.values(questMap)
+            .filter(q => q.total >= 1)
+            .sort((a, b) => (b.done / b.total) - (a.done / a.total))
+            .slice(0, 6);
+        if (!sorted.length) {
+            this.els.questRanking.innerHTML = '<p class="rank-empty">Complete quests to see your ranking</p>';
+            return;
+        }
+        this.els.questRanking.innerHTML = '';
+        sorted.forEach((q, i) => {
+            const pct = Math.round((q.done / q.total) * 100);
+            const row = document.createElement('div');
+            row.className = 'rank-row';
+            row.innerHTML = `
+                <span class="rank-num">${i + 1}</span>
+                <div class="rank-info">
+                    <strong>${q.text}</strong>
+                    <div class="rank-bar-track"><div class="rank-bar-fill" style="width:${pct}%"></div></div>
+                </div>
+                <span class="rank-pct">${pct}%</span>
+            `;
+            this.els.questRanking.appendChild(row);
         });
     }
 
