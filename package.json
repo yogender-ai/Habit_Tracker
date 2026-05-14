@@ -1,5 +1,5 @@
 {
-  "name": "dayforge",
+  "name": "lumina-habit-tracker",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -8,9 +8,7 @@
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1"
   },
-  "dependencies": {
-    "firebase": "^12.13.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "vite": "^8.0.12"
   }

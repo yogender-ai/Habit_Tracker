@@ -4,398 +4,73 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#f6f4ee">
-    <title>DayForge Momentum</title>
+    <meta name="theme-color" content="#fff7f3">
+    <title>Lumina Habit Tracker</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/styles.css">
-    <script src="/config.js"></script>
     <script type="module" src="/src/main.js"></script>
 </head>
 
 <body>
-    <div class="app-shell">
-        <aside class="side-rail" aria-label="DayForge navigation">
-            <div class="brand-block">
-                <div class="brand-mark" aria-hidden="true">DF</div>
+    <div id="loadingScreen" class="loading-screen">
+        <div class="loading-diamond">◇</div>
+        <div class="skeleton-line wide"></div>
+        <div class="skeleton-line"></div>
+    </div>
+
+    <div class="lumina-shell" id="appShell">
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-gem">◇</div>
                 <div>
-                    <p class="eyebrow">Momentum system</p>
-                    <h1>DayForge</h1>
+                    <strong>LUMINA</strong>
+                    <span>Habit Tracker</span>
                 </div>
             </div>
 
-            <div class="profile-panel">
-                <div class="avatar" id="userAvatar">DF</div>
-                <div>
-                    <strong id="userName">Local player</strong>
-                    <span id="syncState">Local save ready</span>
-                </div>
-            </div>
+            <nav class="nav-list" id="navList" aria-label="Lumina pages"></nav>
 
-            <nav class="rail-nav" aria-label="Dashboard sections">
-                <button class="nav-btn active" type="button" data-scroll-target="commandCenter">
-                    <span class="nav-icon">01</span>
-                    Command
-                </button>
-                <button class="nav-btn" type="button" data-scroll-target="trackerSection">
-                    <span class="nav-icon">02</span>
-                    Tracker
-                </button>
-                <button class="nav-btn" type="button" data-scroll-target="recoverySection">
-                    <span class="nav-icon">03</span>
-                    Recovery
-                </button>
-                <button class="nav-btn" type="button" data-scroll-target="reminderSection">
-                    <span class="nav-icon">04</span>
-                    Reminders
-                </button>
-                <button class="nav-btn" type="button" data-scroll-target="rewardSection">
-                    <span class="nav-icon">05</span>
-                    Rewards
-                </button>
-            </nav>
-
-            <div class="level-card">
-                <div class="level-line">
-                    <span>Level <strong id="levelNumber">1</strong></span>
-                    <span id="xpLabel">0 / 650 XP</span>
-                </div>
-                <div class="xp-track" aria-hidden="true">
-                    <div class="xp-fill" id="xpFill"></div>
-                </div>
-            </div>
-
-            <div class="rail-stats">
-                <div>
-                    <strong id="cleanStreak">0</strong>
-                    <span>Clean streak</span>
-                </div>
-                <div>
-                    <strong id="bestStreak">0</strong>
-                    <span>Best streak</span>
-                </div>
-            </div>
-
-            <div class="rail-actions">
-                <button class="button ghost" type="button" id="syncNowBtn">Sync</button>
-                <button class="button primary" type="button" id="authButton">Sign in</button>
+            <div class="premium-card">
+                <div class="premium-gem">◇</div>
+                <strong>Upgrade to Premium</strong>
+                <p>Unlock unlimited habits, advanced analytics, and coach insights.</p>
+                <button class="btn primary" type="button">Go Premium</button>
             </div>
         </aside>
 
-        <main class="workspace">
-            <section class="hero-band" id="commandCenter">
-                <div class="hero-copy">
-                    <p class="eyebrow" id="todayLabel">Today</p>
-                    <h2 id="headlineText">Build proof that you can trust yourself.</h2>
-                    <p id="quoteText">One clean decision can restart the whole day.</p>
-                    <span id="quoteAuthor">DayForge</span>
-                </div>
-                <div class="hero-media" aria-label="Motivational mountain path">
-                    <img src="https://images.unsplash.com/photo-1490730141103-6cac27aaab94?auto=format&fit=crop&w=1200&q=80" alt="Sunrise over a mountain path">
-                </div>
-            </section>
-
-            <header class="top-bar">
+        <main class="main">
+            <header class="topbar">
                 <div>
-                    <p class="eyebrow">Mission control</p>
-                    <h2 id="currentDateTitle">Today</h2>
+                    <h1 id="pageTitle">Good morning, June</h1>
+                    <p id="pageSubtitle">Small actions. Remarkable life.</p>
                 </div>
-                <div class="date-controls">
-                    <button class="icon-button" type="button" id="prevYear" aria-label="Previous year">
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M15 18l-6-6 6-6"></path>
-                        </svg>
-                    </button>
-                    <span id="currentYearDisplay">2026</span>
-                    <button class="icon-button" type="button" id="nextYear" aria-label="Next year">
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M9 18l6-6-6-6"></path>
-                        </svg>
-                    </button>
-                    <input type="date" id="selectedDateInput" aria-label="Selected day">
+
+                <div class="topbar-actions">
+                    <label class="search-box">
+                        <span>⌕</span>
+                        <input id="searchInput" type="search" placeholder="Search habits, goals, notes...">
+                    </label>
+                    <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle theme">☾</button>
+                    <button class="icon-btn" type="button" aria-label="Notifications">◌</button>
+                    <div class="profile-chip">
+                        <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80" alt="June profile">
+                        <div>
+                            <strong>June</strong>
+                            <span>Pro</span>
+                        </div>
+                    </div>
                 </div>
             </header>
 
-            <section class="metric-grid" aria-label="Momentum metrics">
-                <article class="metric-card">
-                    <span>Year completion</span>
-                    <strong id="statOverall">0%</strong>
-                    <p id="statOverallSub">No wins logged yet</p>
-                </article>
-                <article class="metric-card accent-blue">
-                    <span>Today score</span>
-                    <strong id="statToday">0 XP</strong>
-                    <p id="statTodaySub">Plan one quest</p>
-                </article>
-                <article class="metric-card accent-coral">
-                    <span>Urge pressure</span>
-                    <strong id="statUrge">0 / 10</strong>
-                    <p id="statUrgeSub">Calm window</p>
-                </article>
-                <article class="metric-card accent-amber">
-                    <span>Due today</span>
-                    <strong id="statReminders">0</strong>
-                    <p id="statRemindersSub">No reminders due</p>
-                </article>
-            </section>
-
-            <section class="command-grid">
-                <article class="panel focus-panel">
-                    <div class="section-title">
-                        <p class="eyebrow">Daily check-in</p>
-                        <h3>Mindset, urges, truth</h3>
-                    </div>
-
-                    <label class="field">
-                        <span>Focus line</span>
-                        <input id="focusLineInput" type="text" maxlength="180" placeholder="What makes today worth winning?">
-                    </label>
-
-                    <div class="slider-grid">
-                        <label>
-                            <span>Mood</span>
-                            <input id="moodRange" type="range" min="1" max="5" value="3">
-                        </label>
-                        <label>
-                            <span>Energy</span>
-                            <input id="energyRange" type="range" min="1" max="5" value="3">
-                        </label>
-                        <label>
-                            <span>Urge</span>
-                            <input id="urgeRange" type="range" min="0" max="10" value="0">
-                        </label>
-                    </div>
-
-                    <label class="check-row">
-                        <input id="relapseCheck" type="checkbox">
-                        <span>I relapsed today. Log it honestly and restart.</span>
-                    </label>
-
-                    <label class="field">
-                        <span>Gratitude</span>
-                        <input id="gratitudeInput" type="text" maxlength="220" placeholder="One thing still going right">
-                    </label>
-
-                    <label class="field">
-                        <span>Evening reflection</span>
-                        <textarea id="reflectionInput" maxlength="700" placeholder="What worked, what triggered you, and what changes tomorrow?"></textarea>
-                    </label>
-                </article>
-
-                <article class="panel task-panel">
-                    <div class="section-title">
-                        <p class="eyebrow">Quest board</p>
-                        <h3>Tasks that create proof</h3>
-                    </div>
-
-                    <div class="task-composer">
-                        <input id="newTaskInput" type="text" maxlength="110" placeholder="Add a task, contest, meeting, workout">
-                        <select id="newTaskPriority" aria-label="Task priority">
-                            <option value="medium">Core</option>
-                            <option value="high">Boss</option>
-                            <option value="low">Small</option>
-                        </select>
-                        <select id="newTaskGoal" aria-label="Linked goal"></select>
-                        <input id="newTaskEstimate" type="number" min="5" max="480" step="5" value="25" aria-label="Estimated minutes">
-                        <button class="icon-button solid" type="button" id="addTaskBtn" aria-label="Add task">
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                                <path d="M12 5v14M5 12h14"></path>
-                            </svg>
-                        </button>
-                    </div>
-
-                    <div class="task-list" id="taskList"></div>
-                </article>
-
-                <article class="panel progress-panel">
-                    <div class="section-title">
-                        <p class="eyebrow">Daily score</p>
-                        <h3>Win condition</h3>
-                    </div>
-                    <div class="ring-wrap">
-                        <div class="progress-ring" id="progressRing" style="--progress: 0">
-                            <strong id="progressNumber">0%</strong>
-                        </div>
-                        <div>
-                            <p id="progressLabel">No quests yet</p>
-                            <strong id="progressXp">0 XP</strong>
-                            <span id="progressHint">A small start beats a perfect plan.</span>
-                        </div>
-                    </div>
-                    <div class="status-actions">
-                        <button class="button success" type="button" id="claimWinBtn">Claim win</button>
-                        <button class="button danger" type="button" id="markMissedBtn">Mark missed</button>
-                    </div>
-                    <button class="button rescue" type="button" id="panicStartBtn">Start rescue plan</button>
-                </article>
-            </section>
-
-            <section class="tracker-section" id="trackerSection">
-                <article class="panel wide-panel">
-                    <div class="board-header">
-                        <div>
-                            <p class="eyebrow">Annual heatmap</p>
-                            <h3>Momentum field</h3>
-                        </div>
-                        <div class="legend">
-                            <span><i class="dot empty"></i>Open</span>
-                            <span><i class="dot planned"></i>Planned</span>
-                            <span><i class="dot won"></i>Won</span>
-                            <span><i class="dot relapse"></i>Relapse</span>
-                        </div>
-                    </div>
-                    <div class="heatmap-grid" id="heatmapGrid" aria-label="Year heatmap"></div>
-                </article>
-
-                <article class="panel wide-panel">
-                    <div class="board-header">
-                        <div>
-                            <p class="eyebrow">Habit tracker</p>
-                            <h3>Last 21 days</h3>
-                        </div>
-                        <div class="habit-tools">
-                            <input id="habitTitle" type="text" maxlength="90" placeholder="New habit">
-                            <select id="habitCategory" aria-label="Habit category">
-                                <option value="recovery">Recovery</option>
-                                <option value="focus">Focus</option>
-                                <option value="health">Health</option>
-                                <option value="learning">Learning</option>
-                            </select>
-                            <select id="habitGoal" aria-label="Habit goal"></select>
-                            <input id="habitTarget" type="number" min="1" max="7" value="5" aria-label="Weekly target">
-                            <button class="button primary" type="button" id="addHabitBtn">Add habit</button>
-                        </div>
-                    </div>
-                    <div class="habit-matrix" id="habitMatrix"></div>
-                </article>
-            </section>
-
-            <section class="goal-section">
-                <article class="panel">
-                    <div class="section-title">
-                        <p class="eyebrow">Goals</p>
-                        <h3>What this is all for</h3>
-                    </div>
-                    <div class="goal-composer">
-                        <input id="goalTitle" type="text" maxlength="90" placeholder="Goal name">
-                        <input id="goalWhy" type="text" maxlength="220" placeholder="Why it matters">
-                        <input id="goalDate" type="date" aria-label="Goal target date">
-                        <button class="button primary" type="button" id="addGoalBtn">Add goal</button>
-                    </div>
-                    <div class="goal-list" id="goalList"></div>
-                </article>
-
-                <article class="panel" id="recoverySection">
-                    <div class="section-title">
-                        <p class="eyebrow">Recovery engine</p>
-                        <h3>Trigger shield</h3>
-                    </div>
-                    <label class="field">
-                        <span>Addiction to defeat</span>
-                        <input id="recoveryAddiction" type="text" maxlength="60" placeholder="porn, scrolling, gaming, sugar">
-                    </label>
-                    <label class="field">
-                        <span>Why you are quitting</span>
-                        <textarea id="recoveryWhy" maxlength="300" placeholder="Make the reason concrete. Your brain needs a picture of the better life."></textarea>
-                    </label>
-                    <label class="field">
-                        <span>Known triggers</span>
-                        <textarea id="recoveryTriggers" maxlength="700" placeholder="One trigger per line"></textarea>
-                    </label>
-                    <label class="field">
-                        <span>Rescue plan</span>
-                        <textarea id="recoveryPlan" maxlength="700" placeholder="One action per line. Make it physical, fast, and easy."></textarea>
-                    </label>
-                    <button class="button primary" type="button" id="saveRecoveryBtn">Save recovery plan</button>
-                    <div class="panic-list" id="panicPlanList"></div>
-                </article>
-            </section>
-
-            <section class="reminder-section" id="reminderSection">
-                <article class="panel">
-                    <div class="section-title">
-                        <p class="eyebrow">Calendar</p>
-                        <h3>Reminders and events</h3>
-                    </div>
-                    <div class="reminder-composer">
-                        <input id="reminderTitle" type="text" maxlength="120" placeholder="Contest, meeting, focus block">
-                        <input id="reminderDate" type="date" aria-label="Reminder date">
-                        <input id="reminderTime" type="time" aria-label="Reminder time">
-                        <select id="reminderCategory" aria-label="Reminder category">
-                            <option value="focus">Focus</option>
-                            <option value="contest">Contest</option>
-                            <option value="meeting">Meeting</option>
-                            <option value="recovery">Recovery</option>
-                            <option value="health">Health</option>
-                            <option value="learning">Learning</option>
-                            <option value="personal">Personal</option>
-                        </select>
-                        <label class="compact-check">
-                            <input id="reminderNotify" type="checkbox" checked>
-                            Notify
-                        </label>
-                    </div>
-                    <textarea id="reminderNotes" maxlength="400" placeholder="Notes, link, preparation steps"></textarea>
-                    <button class="button primary" type="button" id="addReminderBtn">Save reminder</button>
-                    <div class="reminder-list" id="reminderList"></div>
-                </article>
-
-                <article class="panel">
-                    <div class="section-title">
-                        <p class="eyebrow">Notifications</p>
-                        <h3>Resend email guardrails</h3>
-                    </div>
-                    <label class="field">
-                        <span>Email</span>
-                        <input id="notifyEmail" type="email" maxlength="180" placeholder="you@example.com">
-                    </label>
-                    <label class="check-row">
-                        <input id="notifyEnabled" type="checkbox">
-                        <span>Enable email reminders</span>
-                    </label>
-                    <div class="time-grid">
-                        <label class="check-row">
-                            <input id="morningDigest" type="checkbox">
-                            <span>Morning launch</span>
-                        </label>
-                        <input id="morningTime" type="time" aria-label="Morning digest time">
-                        <label class="check-row">
-                            <input id="eveningReview" type="checkbox">
-                            <span>Evening review</span>
-                        </label>
-                        <input id="eveningTime" type="time" aria-label="Evening review time">
-                        <label class="check-row">
-                            <input id="relapseShield" type="checkbox">
-                            <span>Relapse shield</span>
-                        </label>
-                        <input id="relapseShieldTime" type="time" aria-label="Relapse shield time">
-                    </div>
-                    <div class="button-row">
-                        <button class="button primary" type="button" id="saveNotificationsBtn">Save notifications</button>
-                        <button class="button ghost" type="button" id="testNotificationBtn">Send test</button>
-                    </div>
-                    <p class="helper-text">Scheduled sends require a cron job hitting the backend due endpoint. Render env names are in the README.</p>
-                </article>
-            </section>
-
-            <section class="reward-section" id="rewardSection">
-                <article class="panel wide-panel">
-                    <div class="board-header">
-                        <div>
-                            <p class="eyebrow">Awards</p>
-                            <h3>Profile proof and LinkedIn wins</h3>
-                        </div>
-                        <button class="button ghost" type="button" id="copyLinkedInBtn">Copy LinkedIn text</button>
-                    </div>
-                    <div class="awards-grid" id="awardsGrid"></div>
-                    <textarea id="linkedinText" readonly></textarea>
-                </article>
-            </section>
+            <section id="pageContent" class="page-content" aria-live="polite"></section>
         </main>
     </div>
 
-    <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+    <div id="modalRoot"></div>
+    <div id="toastStack" class="toast-stack" aria-live="polite"></div>
+    <div id="confettiLayer" class="confetti-layer" aria-hidden="true"></div>
 </body>
 
 </html>

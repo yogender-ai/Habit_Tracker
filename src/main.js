@@ -1,126 +1,64 @@
-import { initializeApp } from "firebase/app";
-import {
-    getAuth,
-    GoogleAuthProvider,
-    onAuthStateChanged,
-    signInWithPopup,
-    signOut
-} from "firebase/auth";
+const STORAGE_KEY = "lumina_habit_tracker_v1";
 
-const DEFAULT_CONFIG = {
-    apiBaseUrl: "",
-    firebase: {
-        apiKey: "",
-        authDomain: "",
-        projectId: "",
-        storageBucket: "",
-        messagingSenderId: "",
-        appId: "",
-        measurementId: ""
-    },
-    appTimezone: "Asia/Kolkata"
-};
-
-const CONFIG = {
-    ...DEFAULT_CONFIG,
-    ...(window.DAYFORGE_CONFIG || {}),
-    firebase: {
-        ...DEFAULT_CONFIG.firebase,
-        ...((window.DAYFORGE_CONFIG || {}).firebase || {})
-    }
-};
-
-const XP_BY_PRIORITY = { low: 18, medium: 32, high: 55 };
-const PRIORITY_LABELS = { low: "Small", medium: "Core", high: "Boss" };
-const LEVEL_SIZE = 650;
-
-const QUOTES = [
-    ["One clean decision can restart the whole day.", "DayForge"],
-    ["You do not need a perfect mood. You need the next honest action.", "DayForge"],
-    ["Discipline is remembering what you want most when the shortcut appears.", "DayForge"],
-    ["The urge is a wave. Your plan is the shore.", "DayForge"],
-    ["Build proof quietly. The confidence arrives after the reps.", "DayForge"],
-    ["Win the next ten minutes, then ask again.", "DayForge"],
-    ["Shame hides the problem. Truth gives you handles.", "DayForge"],
-    ["A streak is not magic. It is a trail of protected moments.", "DayForge"],
-    ["Make the good choice easier to see than the bad choice.", "DayForge"],
-    ["Your future self is watching the small promises.", "DayForge"]
+const navItems = [
+    ["dashboard", "Dashboard", "⌂"],
+    ["today", "Today", "□"],
+    ["habits", "My Habits", "◇"],
+    ["goals", "Goals", "△"],
+    ["calendar", "Calendar", "▦"],
+    ["analytics", "Analytics", "⌁"],
+    ["coach", "AI Coach", "♙"],
+    ["journal", "Journal", "▤"],
+    ["rewards", "Rewards", "♢"],
+    ["settings", "Settings", "⚙"]
 ];
 
-const DEFAULT_GOALS = [
-    {
-        id: "goal-clean-mind",
-        title: "Remove addiction",
-        why: "Protect attention, confidence, and self-respect.",
-        targetDate: "",
-        status: "active",
-        skill: "Recovery",
-        color: "mint",
-        createdAt: new Date().toISOString()
-    },
-    {
-        id: "goal-focus-career",
-        title: "Focus on the main goal",
-        why: "Turn daily discipline into visible career progress.",
-        targetDate: "",
-        status: "active",
-        skill: "Execution",
-        color: "blue",
-        createdAt: new Date().toISOString()
-    }
+const habitSeed = [
+    { id: "meditate", icon: "leaf", title: "Morning Meditation", description: "Calm attention before the day starts.", category: "Mind", frequency: "Daily", reminder: "06:30 AM", target: 30, streak: 16 },
+    { id: "water", icon: "drop", title: "Drink 2L Water", description: "Hydrate for energy and skin health.", category: "Wellness", frequency: "Daily", reminder: "Every 2 hours", target: 30, streak: 8 },
+    { id: "deep-work", icon: "bolt", title: "Deep Work Session", description: "Protect focused output from distractions.", category: "Productivity", frequency: "Mon-Fri", reminder: "10:00 AM", target: 22, streak: 12 },
+    { id: "read", icon: "book", title: "Read 20 Pages", description: "Build knowledge with a quiet reading block.", category: "Growth", frequency: "Daily", reminder: "09:00 PM", target: 25, streak: 7 },
+    { id: "workout", icon: "spark", title: "Strength Training", description: "Move your body and build confidence.", category: "Wellness", frequency: "4x weekly", reminder: "06:00 PM", target: 18, streak: 5 },
+    { id: "sleep", icon: "moon", title: "Sleep 7+ Hours", description: "Recover deeply and protect tomorrow.", category: "Wellness", frequency: "Daily", reminder: "10:30 PM", target: 30, streak: 21 },
+    { id: "study", icon: "book", title: "Study 2 Hours", description: "Invest in your future self.", category: "Growth", frequency: "Daily", reminder: "08:00 AM", target: 29, streak: 12 }
 ];
 
-const DEFAULT_HABITS = [
-    { id: "habit-no-porn", title: "No porn", category: "recovery", goalId: "goal-clean-mind", targetPerWeek: 7, active: true, createdAt: new Date().toISOString() },
-    { id: "habit-trigger-plan", title: "Run trigger shield", category: "recovery", goalId: "goal-clean-mind", targetPerWeek: 5, active: true, createdAt: new Date().toISOString() },
-    { id: "habit-deep-work", title: "Deep work block", category: "focus", goalId: "goal-focus-career", targetPerWeek: 6, active: true, createdAt: new Date().toISOString() },
-    { id: "habit-contest-practice", title: "Contest practice", category: "learning", goalId: "goal-focus-career", targetPerWeek: 4, active: true, createdAt: new Date().toISOString() },
-    { id: "habit-move-body", title: "Workout or walk", category: "health", goalId: "", targetPerWeek: 5, active: true, createdAt: new Date().toISOString() },
-    { id: "habit-journal", title: "Journal truth", category: "focus", goalId: "", targetPerWeek: 5, active: true, createdAt: new Date().toISOString() }
+const goalSeed = [
+    { id: "health", title: "Become healthier", category: "Wellness", deadline: "2026-08-30", progress: 68, habits: ["meditate", "water", "workout", "sleep"], milestones: ["Consistent hydration", "Four workouts weekly", "Sleep before 11 PM"] },
+    { id: "focus", title: "Improve focus", category: "Productivity", deadline: "2026-07-20", progress: 74, habits: ["deep-work", "meditate"], milestones: ["Morning planning", "90 minute focus block", "No phone desk rule"] },
+    { id: "programmer", title: "Become better programmer", category: "Growth", deadline: "2026-10-10", progress: 52, habits: ["study", "deep-work", "read"], milestones: ["Solve 100 problems", "Build one project", "Ship portfolio update"] },
+    { id: "sleep-goal", title: "Sleep better", category: "Wellness", deadline: "2026-06-30", progress: 81, habits: ["sleep", "read"], milestones: ["Screen off by 10 PM", "Evening wind-down", "Track energy daily"] }
 ];
 
-const AWARDS = [
-    { id: "first_clean", code: "01", title: "First Clean Day", desc: "Logged one clean recovery day.", rule: (s) => s.cleanDays >= 1 },
-    { id: "three_chain", code: "03", title: "Three Day Chain", desc: "Protected a clean streak for three days.", rule: (s) => s.bestStreak >= 3 },
-    { id: "seven_chain", code: "07", title: "Seven Day Chain", desc: "Built one full week of clean proof.", rule: (s) => s.bestStreak >= 7 },
-    { id: "task_slayer", code: "25", title: "Quest Slayer", desc: "Completed 25 tasks.", rule: (s) => s.doneTasks >= 25 },
-    { id: "boss_win", code: "B", title: "Boss Quest Win", desc: "Completed a high-priority task.", rule: (s) => s.bossTasksDone >= 1 },
-    { id: "heat", code: "H", title: "Habit Heat", desc: "Checked 50 habit boxes.", rule: (s) => s.habitChecks >= 50 },
-    { id: "calm_under_fire", code: "C", title: "Calm Under Fire", desc: "Logged an urge of 7+ without relapse.", rule: (s) => s.urgeWins >= 1 },
-    { id: "level_five", code: "L5", title: "Level Five", desc: "Earned enough XP to reach level 5.", rule: (s) => s.level >= 5 }
+const rewardsSeed = [
+    ["first-week", "First Week Glow", "Complete 7 habit days.", true],
+    ["focus-hero", "Focus Hero", "Finish 20 deep work sessions.", true],
+    ["hydration-star", "Hydration Star", "Drink water for 14 days.", true],
+    ["moon-master", "Moon Master", "Sleep well for 21 days.", false],
+    ["growth-gem", "Growth Gem", "Study for 50 hours.", false],
+    ["discipline-elite", "Discipline Elite", "Reach 90 discipline score.", false]
+].map(([id, title, desc, unlocked]) => ({ id, title, desc, unlocked }));
+
+const aiInsights = [
+    "Your morning routine is driving most of your consistency. Keep it protected.",
+    "Deep work performs best before noon. Schedule hard tasks before messages.",
+    "Sleep quality dips when evening routines are skipped. Add a softer shutdown cue.",
+    "You are more consistent on weekdays. Weekend planning is the growth opportunity."
 ];
 
-function toDateKey(date) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
+function todayKey() {
+    const d = new Date();
+    return toDateKey(d);
 }
 
-function parseDateKey(dateKey) {
-    const [year, month, day] = String(dateKey).split("-").map(Number);
-    return new Date(year, month - 1, day);
+function toDateKey(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function addDays(date, amount) {
     const next = new Date(date);
     next.setDate(next.getDate() + amount);
     return next;
-}
-
-function uid() {
-    if (window.crypto?.randomUUID) {
-        return window.crypto.randomUUID();
-    }
-    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function safeJson(value, fallback) {
-    try {
-        return JSON.parse(value);
-    } catch {
-        return fallback;
-    }
 }
 
 function escapeHtml(value) {
@@ -132,1385 +70,940 @@ function escapeHtml(value) {
         .replace(/'/g, "&#039;");
 }
 
-function clamp(value, min, max, fallback) {
-    const number = Number.parseInt(value, 10);
-    if (Number.isNaN(number)) {
-        return fallback;
-    }
-    return Math.max(min, Math.min(max, number));
+function uid() {
+    return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function formatHumanDate(dateKey) {
-    const date = parseDateKey(dateKey);
-    return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
-}
-
-function updatedAtMs(value) {
-    const time = Date.parse(value || "");
-    return Number.isNaN(time) ? 0 : time;
-}
-
-function uniqueLines(value, limit = 10) {
-    return String(value || "")
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .slice(0, limit);
-}
-
-class DayForgeApp {
-    constructor() {
-        this.config = CONFIG;
-        this.apiBase = this.resolveApiBase();
-        this.todayKey = toDateKey(new Date());
-        this.selectedDate = this.todayKey;
-        this.currentYear = new Date().getFullYear();
-        this.currentUser = { uid: "local-player", displayName: "Local player", email: "" };
-        this.firebaseApp = null;
-        this.firebaseAuth = null;
-        this.firebaseReady = false;
-        this.dayTimers = new Map();
-        this.workspaceTimer = null;
-        this.days = this.loadDays(this.currentUser.uid);
-        this.workspace = this.loadWorkspace(this.currentUser.uid);
-        this.lastLevel = 1;
-        this.els = this.collectElements();
-        this.init();
-    }
-
-    collectElements() {
-        const ids = [
-            "userAvatar", "userName", "syncState", "syncNowBtn", "authButton", "levelNumber", "xpLabel", "xpFill",
-            "cleanStreak", "bestStreak", "todayLabel", "headlineText", "quoteText", "quoteAuthor", "currentDateTitle",
-            "prevYear", "nextYear", "currentYearDisplay", "selectedDateInput", "statOverall", "statOverallSub",
-            "statToday", "statTodaySub", "statUrge", "statUrgeSub", "statReminders", "statRemindersSub",
-            "focusLineInput", "moodRange", "energyRange", "urgeRange", "relapseCheck", "gratitudeInput",
-            "reflectionInput", "newTaskInput", "newTaskPriority", "newTaskGoal", "newTaskEstimate", "addTaskBtn",
-            "taskList", "progressRing", "progressNumber", "progressLabel", "progressXp", "progressHint",
-            "claimWinBtn", "markMissedBtn", "panicStartBtn", "heatmapGrid", "habitTitle", "habitCategory",
-            "habitGoal", "habitTarget", "addHabitBtn", "habitMatrix", "goalTitle", "goalWhy", "goalDate",
-            "addGoalBtn", "goalList", "recoveryAddiction", "recoveryWhy", "recoveryTriggers", "recoveryPlan",
-            "saveRecoveryBtn", "panicPlanList", "reminderTitle", "reminderDate", "reminderTime", "reminderCategory",
-            "reminderNotify", "reminderNotes", "addReminderBtn", "reminderList", "notifyEmail", "notifyEnabled",
-            "morningDigest", "morningTime", "eveningReview", "eveningTime", "relapseShield", "relapseShieldTime",
-            "saveNotificationsBtn", "testNotificationBtn", "awardsGrid", "linkedinText", "copyLinkedInBtn",
-            "toastStack"
-        ];
-        return Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
-    }
-
-    async init() {
-        this.bindEvents();
-        this.setInitialFormDates();
-        await this.initAuth();
-        await this.syncFromCloud({ quiet: true });
-        this.renderAll();
-    }
-
-    resolveApiBase() {
-        const configured = String(this.config.apiBaseUrl || "").trim().replace(/\/$/, "");
-        if (configured) {
-            return configured;
-        }
-
-        const host = window.location.hostname;
-        const port = window.location.port;
-        const isRender = host.includes("onrender.com");
-        const isBackendLocal = host === "127.0.0.1" || host === "localhost";
-        if (isRender || (isBackendLocal && ["5000", "8000", "10000"].includes(port))) {
-            return window.location.origin;
-        }
-        return "";
-    }
-
-    bindEvents() {
-        this.els.prevYear.addEventListener("click", () => {
-            this.currentYear -= 1;
-            this.renderAll();
-            this.syncFromCloud({ quiet: true });
-        });
-
-        this.els.nextYear.addEventListener("click", () => {
-            this.currentYear += 1;
-            this.renderAll();
-            this.syncFromCloud({ quiet: true });
-        });
-
-        this.els.selectedDateInput.addEventListener("change", () => {
-            if (this.els.selectedDateInput.value) {
-                this.selectDate(this.els.selectedDateInput.value);
-            }
-        });
-
-        document.querySelectorAll("[data-scroll-target]").forEach((button) => {
-            button.addEventListener("click", () => {
-                document.querySelectorAll(".nav-btn").forEach((item) => item.classList.remove("active"));
-                button.classList.add("active");
-                document.getElementById(button.dataset.scrollTarget)?.scrollIntoView({ behavior: "smooth", block: "start" });
-            });
-        });
-
-        this.els.syncNowBtn.addEventListener("click", () => this.syncFromCloud({ quiet: false }));
-        this.els.authButton.addEventListener("click", () => this.handleAuthClick());
-        this.els.addTaskBtn.addEventListener("click", () => this.addTask());
-        this.els.newTaskInput.addEventListener("keydown", (event) => {
-            if (event.key === "Enter") {
-                event.preventDefault();
-                this.addTask();
-            }
-        });
-
-        ["focusLineInput", "moodRange", "energyRange", "urgeRange", "relapseCheck", "gratitudeInput", "reflectionInput"].forEach((id) => {
-            const eventName = id.endsWith("Input") || id === "reflectionInput" || id === "gratitudeInput" ? "blur" : "change";
-            this.els[id].addEventListener(eventName, () => this.saveDailyCheckIn());
-        });
-
-        this.els.taskList.addEventListener("change", (event) => {
-            const checkbox = event.target.closest("[data-task-check]");
-            if (checkbox) {
-                this.toggleTask(checkbox.dataset.taskCheck, checkbox.checked);
-            }
-        });
-
-        this.els.taskList.addEventListener("click", (event) => {
-            const button = event.target.closest("[data-task-delete]");
-            if (button) {
-                this.deleteTask(button.dataset.taskDelete);
-            }
-        });
-
-        this.els.claimWinBtn.addEventListener("click", () => this.setDayStatus("won"));
-        this.els.markMissedBtn.addEventListener("click", () => this.setDayStatus("missed"));
-        this.els.panicStartBtn.addEventListener("click", () => this.startRescuePlan());
-        this.els.addGoalBtn.addEventListener("click", () => this.addGoal());
-        this.els.addHabitBtn.addEventListener("click", () => this.addHabit());
-
-        this.els.goalList.addEventListener("click", (event) => {
-            const button = event.target.closest("[data-goal-action]");
-            if (button) {
-                this.updateGoal(button.dataset.goalAction, button.dataset.goalId);
-            }
-        });
-
-        this.els.habitMatrix.addEventListener("change", (event) => {
-            const checkbox = event.target.closest("[data-habit-check]");
-            if (checkbox) {
-                this.toggleHabit(checkbox.dataset.habitCheck, checkbox.dataset.dateKey, checkbox.checked);
-            }
-        });
-
-        this.els.addReminderBtn.addEventListener("click", () => this.addReminder());
-        this.els.reminderList.addEventListener("change", (event) => {
-            const checkbox = event.target.closest("[data-reminder-check]");
-            if (checkbox) {
-                this.toggleReminder(checkbox.dataset.reminderCheck, checkbox.checked);
-            }
-        });
-        this.els.reminderList.addEventListener("click", (event) => {
-            const button = event.target.closest("[data-reminder-delete]");
-            if (button) {
-                this.deleteReminder(button.dataset.reminderDelete);
-            }
-        });
-
-        this.els.saveRecoveryBtn.addEventListener("click", () => this.saveRecoveryPlan());
-        this.els.saveNotificationsBtn.addEventListener("click", () => this.saveNotificationSettings());
-        this.els.testNotificationBtn.addEventListener("click", () => this.sendTestNotification());
-        this.els.copyLinkedInBtn.addEventListener("click", () => this.copyLinkedInText());
-    }
-
-    setInitialFormDates() {
-        const nextHour = new Date();
-        nextHour.setHours(nextHour.getHours() + 1, 0, 0, 0);
-        this.els.selectedDateInput.value = this.selectedDate;
-        this.els.reminderDate.value = this.todayKey;
-        this.els.reminderTime.value = `${String(nextHour.getHours()).padStart(2, "0")}:00`;
-        this.els.goalDate.value = toDateKey(addDays(new Date(), 90));
-    }
-
-    async initAuth() {
-        if (!this.hasFirebaseConfig()) {
-            this.updateAuthUi();
-            this.setSyncState(this.apiBase ? "Cloud API ready" : "Saved on this device");
-            return;
-        }
-
+function readState() {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
         try {
-            this.firebaseApp = initializeApp(this.config.firebase);
-            this.firebaseAuth = getAuth(this.firebaseApp);
-            this.firebaseReady = true;
+            const parsed = JSON.parse(saved);
+            return {
+                ...defaultState(),
+                ...parsed,
+                habits: Array.isArray(parsed.habits) ? parsed.habits : habitSeed,
+                goals: Array.isArray(parsed.goals) ? parsed.goals : goalSeed,
+                rewards: Array.isArray(parsed.rewards) ? parsed.rewards : rewardsSeed,
+                completions: parsed.completions || {},
+                journal: parsed.journal || {}
+            };
         } catch {
-            this.setSyncState("Firebase config needs attention");
-            this.updateAuthUi();
-            return;
+            return defaultState();
         }
+    }
+    return defaultState();
+}
 
-        await new Promise((resolve) => {
-            let firstRun = true;
-            onAuthStateChanged(this.firebaseAuth, async (user) => {
-                await this.applyAuthUser(user);
-                this.renderAll();
-                if (firstRun) {
-                    firstRun = false;
-                    resolve();
-                }
-            });
+function defaultState() {
+    const completions = {};
+    const today = new Date();
+    for (let i = 0; i < 30; i += 1) {
+        const key = toDateKey(addDays(today, -i));
+        completions[key] = {};
+        habitSeed.forEach((habit, index) => {
+            const wave = (i + index) % 7;
+            completions[key][habit.id] = wave < 5 || (i < 2 && index < 4);
         });
     }
+    return {
+        page: "dashboard",
+        theme: "light",
+        selectedDate: todayKey(),
+        habits: habitSeed,
+        goals: goalSeed,
+        rewards: rewardsSeed,
+        completions,
+        journal: {},
+        settings: {
+            reminders: true,
+            weeklyReview: true,
+            softAnimations: true,
+            compactCalendar: false
+        },
+        categories: ["Wellness", "Mind", "Growth", "Productivity"]
+    };
+}
 
-    hasFirebaseConfig() {
-        const firebaseConfig = this.config.firebase || {};
-        return Boolean(firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.projectId && firebaseConfig.appId);
+let state = readState();
+
+const els = {
+    shell: document.getElementById("appShell"),
+    loading: document.getElementById("loadingScreen"),
+    nav: document.getElementById("navList"),
+    content: document.getElementById("pageContent"),
+    title: document.getElementById("pageTitle"),
+    subtitle: document.getElementById("pageSubtitle"),
+    themeToggle: document.getElementById("themeToggle"),
+    modal: document.getElementById("modalRoot"),
+    toast: document.getElementById("toastStack"),
+    confetti: document.getElementById("confettiLayer")
+};
+
+function saveState() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function completedFor(dateKey = todayKey()) {
+    return state.completions[dateKey] || {};
+}
+
+function completionStats(dateKey = todayKey()) {
+    const map = completedFor(dateKey);
+    const total = state.habits.length || 1;
+    const done = state.habits.filter((habit) => map[habit.id]).length;
+    return { done, total, pct: Math.round((done / total) * 100) };
+}
+
+function monthlyStats() {
+    const today = new Date();
+    const keys = Array.from({ length: 30 }, (_, index) => toDateKey(addDays(today, -29 + index)));
+    return keys.map((key, index) => ({ name: String(index + 1), value: completionStats(key).pct, key }));
+}
+
+function streak() {
+    let run = 0;
+    for (let i = 0; i < 365; i += 1) {
+        const key = toDateKey(addDays(new Date(), -i));
+        if (completionStats(key).pct >= 70) run += 1;
+        else break;
     }
-
-    hasCloudApi() {
-        return Boolean(this.apiBase);
-    }
-
-    async applyAuthUser(user) {
-        const previousDays = this.days;
-        const previousWorkspace = this.workspace;
-        const wasGuest = this.currentUser.uid === "local-player";
-
-        if (!user) {
-            this.currentUser = { uid: "local-player", displayName: "Local player", email: "" };
-            this.days = this.loadDays(this.currentUser.uid);
-            this.workspace = this.loadWorkspace(this.currentUser.uid);
-            this.updateAuthUi();
-            return;
-        }
-
-        this.currentUser = {
-            uid: user.uid,
-            displayName: user.displayName || user.email || "DayForge player",
-            email: user.email || ""
-        };
-
-        this.days = wasGuest ? this.mergeDayMaps(this.loadDays(user.uid), previousDays) : this.loadDays(user.uid);
-        this.workspace = wasGuest ? this.mergeWorkspace(this.loadWorkspace(user.uid), previousWorkspace) : this.loadWorkspace(user.uid);
-        if (!this.workspace.profile.displayName) {
-            this.workspace.profile.displayName = this.currentUser.displayName;
-        }
-        if (!this.workspace.notificationSettings.email && this.currentUser.email) {
-            this.workspace.notificationSettings.email = this.currentUser.email;
-        }
-        this.saveLocal();
-        this.updateAuthUi();
-        await this.syncFromCloud({ quiet: true });
-    }
-
-    storageKey(kind, uidValue = this.currentUser.uid) {
-        return `dayforge_v2_${kind}_${uidValue}`;
-    }
-
-    loadDays(uidValue) {
-        const raw = localStorage.getItem(this.storageKey("days", uidValue));
-        const parsed = safeJson(raw, null);
-        if (parsed) {
-            return this.normalizeDayMap(parsed);
-        }
-        const legacy = safeJson(localStorage.getItem(`dayforge_v1_${uidValue}`), {});
-        return this.normalizeDayMap(legacy || {});
-    }
-
-    loadWorkspace(uidValue) {
-        const raw = localStorage.getItem(this.storageKey("workspace", uidValue));
-        return this.normalizeWorkspace(safeJson(raw, null));
-    }
-
-    saveLocal() {
-        localStorage.setItem(this.storageKey("days"), JSON.stringify(this.days));
-        localStorage.setItem(this.storageKey("workspace"), JSON.stringify(this.workspace));
-    }
-
-    defaultWorkspace() {
-        return {
-            profile: {
-                displayName: this.currentUser.displayName === "Local player" ? "" : this.currentUser.displayName,
-                mission: "Remove addiction. Focus on the goal. Build proof daily.",
-                identity: "I am the kind of person who keeps promises to myself."
-            },
-            recovery: {
-                addictionName: "porn",
-                why: "",
-                triggers: ["Late-night phone use", "Stress after failure", "Being alone without a plan"],
-                rescuePlan: ["Stand up and leave the room", "Drink water and breathe for 60 seconds", "Open DayForge and finish one small quest"]
-            },
-            goals: DEFAULT_GOALS.map((goal) => ({ ...goal })),
-            habits: DEFAULT_HABITS.map((habit) => ({ ...habit })),
-            reminders: [],
-            notificationSettings: {
-                enabled: false,
-                email: this.currentUser.email || "",
-                timezone: this.config.appTimezone || "Asia/Kolkata",
-                morningDigest: true,
-                morningTime: "07:30",
-                eveningReview: true,
-                eveningTime: "21:30",
-                relapseShield: true,
-                relapseShieldTime: "22:45",
-                lastMorningDigestKey: "",
-                lastEveningReviewKey: "",
-                lastRelapseShieldKey: ""
-            },
-            updatedAt: new Date().toISOString()
-        };
-    }
-
-    normalizeWorkspace(workspace) {
-        const base = this.defaultWorkspace();
-        const source = workspace && typeof workspace === "object" ? workspace : {};
-        const hasGoals = Array.isArray(source.goals);
-        const hasHabits = Array.isArray(source.habits);
-        const hasReminders = Array.isArray(source.reminders);
-        const settings = source.notificationSettings || {};
-
-        return {
-            profile: {
-                ...base.profile,
-                ...(source.profile || {})
-            },
-            recovery: {
-                ...base.recovery,
-                ...(source.recovery || {}),
-                triggers: Array.isArray(source.recovery?.triggers) ? source.recovery.triggers.slice(0, 10) : base.recovery.triggers,
-                rescuePlan: Array.isArray(source.recovery?.rescuePlan) ? source.recovery.rescuePlan.slice(0, 10) : base.recovery.rescuePlan
-            },
-            goals: (hasGoals ? source.goals : base.goals).map((goal) => this.normalizeGoal(goal)).filter(Boolean).slice(0, 24),
-            habits: (hasHabits ? source.habits : base.habits).map((habit) => this.normalizeHabit(habit)).filter(Boolean).slice(0, 40),
-            reminders: (hasReminders ? source.reminders : base.reminders).map((reminder) => this.normalizeReminder(reminder)).filter(Boolean).slice(0, 180),
-            notificationSettings: {
-                ...base.notificationSettings,
-                ...settings,
-                enabled: Boolean(settings.enabled),
-                morningDigest: settings.morningDigest !== false,
-                eveningReview: settings.eveningReview !== false,
-                relapseShield: settings.relapseShield !== false
-            },
-            updatedAt: source.updatedAt || new Date().toISOString()
-        };
-    }
-
-    normalizeGoal(goal = {}) {
-        const title = String(goal.title || "").trim().slice(0, 90);
-        if (!title) return null;
-        return {
-            id: goal.id || uid(),
-            title,
-            why: String(goal.why || "").trim().slice(0, 220),
-            targetDate: /^\d{4}-\d{2}-\d{2}$/.test(goal.targetDate || "") ? goal.targetDate : "",
-            status: ["active", "paused", "completed"].includes(goal.status) ? goal.status : "active",
-            skill: String(goal.skill || "").trim().slice(0, 80),
-            color: String(goal.color || "mint").trim().slice(0, 24),
-            createdAt: goal.createdAt || new Date().toISOString()
-        };
-    }
-
-    normalizeHabit(habit = {}) {
-        const title = String(habit.title || "").trim().slice(0, 90);
-        if (!title) return null;
-        return {
-            id: habit.id || uid(),
-            title,
-            category: String(habit.category || "focus").trim().slice(0, 40),
-            goalId: String(habit.goalId || "").trim().slice(0, 80),
-            targetPerWeek: clamp(habit.targetPerWeek, 1, 7, 5),
-            active: habit.active !== false,
-            createdAt: habit.createdAt || new Date().toISOString()
-        };
-    }
-
-    normalizeReminder(reminder = {}) {
-        const title = String(reminder.title || "").trim().slice(0, 120);
-        if (!title) return null;
-        return {
-            id: reminder.id || uid(),
-            title,
-            notes: String(reminder.notes || "").trim().slice(0, 400),
-            date: /^\d{4}-\d{2}-\d{2}$/.test(reminder.date || "") ? reminder.date : this.todayKey,
-            time: /^\d{2}:\d{2}$/.test(reminder.time || "") ? reminder.time : "09:00",
-            category: String(reminder.category || "focus").trim().slice(0, 40),
-            goalId: String(reminder.goalId || "").trim().slice(0, 80),
-            notify: reminder.notify !== false,
-            done: Boolean(reminder.done),
-            lastNotifiedKey: String(reminder.lastNotifiedKey || "").trim().slice(0, 40),
-            createdAt: reminder.createdAt || new Date().toISOString(),
-            updatedAt: reminder.updatedAt || new Date().toISOString()
-        };
-    }
-
-    normalizeDayMap(map) {
-        const normalized = {};
-        Object.entries(map || {}).forEach(([dateKey, day]) => {
-            if (/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
-                normalized[dateKey] = this.normalizeDay(dateKey, day);
-            }
-        });
-        return normalized;
-    }
-
-    normalizeDay(dateKey, day = {}) {
-        const tasks = Array.isArray(day.tasks) ? day.tasks : [];
-        const habitChecks = day.habitChecks && typeof day.habitChecks === "object" ? day.habitChecks : {};
-        const focusLine = String(day.focusLine || day.motivation || "").trim().slice(0, 180);
-        return {
-            dateKey,
-            status: ["neutral", "won", "missed"].includes(day.status) ? day.status : "neutral",
-            focusLine,
-            motivation: focusLine,
-            mood: clamp(day.mood, 1, 5, 3),
-            energy: clamp(day.energy, 1, 5, 3),
-            urge: clamp(day.urge, 0, 10, 0),
-            relapse: Boolean(day.relapse),
-            gratitude: String(day.gratitude || "").trim().slice(0, 220),
-            reflection: String(day.reflection || "").trim().slice(0, 700),
-            habitChecks: Object.fromEntries(Object.entries(habitChecks).map(([key, value]) => [key, Boolean(value)])),
-            tasks: tasks.map((task) => {
-                const title = String(task.title || task.text || "").trim().slice(0, 110);
-                if (!title) return null;
-                return {
-                    id: task.id || uid(),
-                    title,
-                    text: title,
-                    done: Boolean(task.done),
-                    priority: ["low", "medium", "high"].includes(task.priority) ? task.priority : "medium",
-                    goalId: String(task.goalId || "").trim().slice(0, 80),
-                    habitId: String(task.habitId || "").trim().slice(0, 80),
-                    estimateMins: clamp(task.estimateMins, 5, 480, 25),
-                    createdAt: task.createdAt || new Date().toISOString(),
-                    completedAt: task.completedAt || null
-                };
-            }).filter(Boolean).slice(0, 100),
-            updatedAt: day.updatedAt || new Date().toISOString()
-        };
-    }
-
-    mergeDayMaps(baseMap, incomingMap) {
-        const merged = { ...this.normalizeDayMap(baseMap) };
-        const incoming = this.normalizeDayMap(incomingMap);
-        Object.entries(incoming).forEach(([dateKey, day]) => {
-            const existing = merged[dateKey];
-            if (!existing || updatedAtMs(day.updatedAt) >= updatedAtMs(existing.updatedAt)) {
-                merged[dateKey] = day;
-            }
-        });
-        return merged;
-    }
-
-    mergeWorkspace(localWorkspace, incomingWorkspace) {
-        const local = this.normalizeWorkspace(localWorkspace);
-        const incoming = this.normalizeWorkspace(incomingWorkspace);
-        if (this.isBlankWorkspace(incoming) && !this.isBlankWorkspace(local)) {
-            return local;
-        }
-        return updatedAtMs(incoming.updatedAt) >= updatedAtMs(local.updatedAt) ? incoming : local;
-    }
-
-    isBlankWorkspace(workspace) {
-        return !workspace.goals.length
-            && !workspace.habits.length
-            && !workspace.reminders.length
-            && !workspace.profile?.mission
-            && !workspace.profile?.displayName
-            && !workspace.recovery?.why;
-    }
-
-    getDay(dateKey, create = true) {
-        if (!this.days[dateKey] && create) {
-            this.days[dateKey] = this.normalizeDay(dateKey, { dateKey });
-        }
-        return this.days[dateKey] || null;
-    }
-
-    touchDay(dateKey) {
-        const day = this.getDay(dateKey, true);
-        day.updatedAt = new Date().toISOString();
-        return day;
-    }
-
-    touchWorkspace() {
-        this.workspace.updatedAt = new Date().toISOString();
-    }
-
-    selectDate(dateKey) {
-        this.selectedDate = dateKey;
-        this.currentYear = Number(dateKey.slice(0, 4));
-        this.renderAll();
-    }
-
-    saveDailyCheckIn() {
-        const day = this.touchDay(this.selectedDate);
-        day.focusLine = this.els.focusLineInput.value.trim();
-        day.motivation = day.focusLine;
-        day.mood = clamp(this.els.moodRange.value, 1, 5, 3);
-        day.energy = clamp(this.els.energyRange.value, 1, 5, 3);
-        day.urge = clamp(this.els.urgeRange.value, 0, 10, 0);
-        day.relapse = this.els.relapseCheck.checked;
-        day.gratitude = this.els.gratitudeInput.value.trim();
-        day.reflection = this.els.reflectionInput.value.trim();
-        this.autoStatus(day);
-        this.persistDay(this.selectedDate);
-        this.renderAll();
-    }
-
-    addTask() {
-        const title = this.els.newTaskInput.value.trim();
-        if (!title) {
-            this.toast("Name the task first.", "warn");
-            return;
-        }
-
-        const day = this.touchDay(this.selectedDate);
-        day.tasks.push({
-            id: uid(),
-            title,
-            text: title,
-            done: false,
-            priority: this.els.newTaskPriority.value,
-            goalId: this.els.newTaskGoal.value,
-            habitId: "",
-            estimateMins: clamp(this.els.newTaskEstimate.value, 5, 480, 25),
-            createdAt: new Date().toISOString(),
-            completedAt: null
-        });
-        this.els.newTaskInput.value = "";
-        this.autoStatus(day);
-        this.persistDay(this.selectedDate);
-        this.renderAll();
-        this.els.newTaskInput.focus();
-        this.toast("Task saved.", "success");
-    }
-
-    toggleTask(taskId, done) {
-        const day = this.touchDay(this.selectedDate);
-        const task = day.tasks.find((item) => item.id === taskId);
-        if (!task) return;
-        task.done = done;
-        task.completedAt = done ? new Date().toISOString() : null;
-        this.autoStatus(day);
-        this.persistDay(this.selectedDate);
-        this.renderAll();
-        if (done) {
-            this.toast(`+${XP_BY_PRIORITY[task.priority] || XP_BY_PRIORITY.medium} XP. Proof recorded.`, "success");
-        }
-    }
-
-    deleteTask(taskId) {
-        const day = this.touchDay(this.selectedDate);
-        day.tasks = day.tasks.filter((task) => task.id !== taskId);
-        this.autoStatus(day);
-        this.persistDay(this.selectedDate);
-        this.renderAll();
-    }
-
-    setDayStatus(status) {
-        const day = this.touchDay(this.selectedDate);
-        const progress = this.dayProgress(day);
-        if (status === "won" && progress.total > 0 && progress.done < progress.total) {
-            this.toast("Finish every visible item before claiming the win.", "warn");
-            return;
-        }
-        day.status = day.status === status ? "neutral" : status;
-        this.persistDay(this.selectedDate);
-        this.renderAll();
-    }
-
-    autoStatus(day) {
-        const progress = this.dayProgress(day);
-        if (day.relapse) {
-            day.status = "missed";
-            return;
-        }
-        if (progress.total > 0 && progress.done === progress.total) {
-            day.status = "won";
-        } else if (day.status === "won") {
-            day.status = "neutral";
-        }
-    }
-
-    startRescuePlan() {
-        const plan = this.workspace.recovery.rescuePlan.length
-            ? this.workspace.recovery.rescuePlan
-            : this.defaultWorkspace().recovery.rescuePlan;
-        const day = this.touchDay(this.todayKey);
-        const title = `Rescue: ${plan[0] || "leave the room for two minutes"}`;
-        day.urge = Math.max(day.urge || 0, 7);
-        day.tasks.unshift({
-            id: uid(),
-            title,
-            text: title,
-            done: false,
-            priority: "high",
-            goalId: "goal-clean-mind",
-            habitId: "",
-            estimateMins: 5,
-            createdAt: new Date().toISOString(),
-            completedAt: null
-        });
-        this.selectedDate = this.todayKey;
-        this.autoStatus(day);
-        this.persistDay(this.todayKey);
-        this.renderAll();
-        this.toast("Rescue task started. Move your body now.", "warn");
-    }
-
-    addGoal() {
-        const title = this.els.goalTitle.value.trim();
-        if (!title) {
-            this.toast("Give the goal a name.", "warn");
-            return;
-        }
-        this.workspace.goals.unshift({
-            id: uid(),
-            title,
-            why: this.els.goalWhy.value.trim(),
-            targetDate: this.els.goalDate.value,
-            status: "active",
-            skill: "",
-            color: "mint",
-            createdAt: new Date().toISOString()
-        });
-        this.els.goalTitle.value = "";
-        this.els.goalWhy.value = "";
-        this.touchWorkspace();
-        this.persistWorkspace();
-        this.renderAll();
-        this.toast("Goal saved.", "success");
-    }
-
-    updateGoal(action, goalId) {
-        if (action === "delete") {
-            this.workspace.goals = this.workspace.goals.filter((goal) => goal.id !== goalId);
-        } else {
-            this.workspace.goals = this.workspace.goals.map((goal) => {
-                if (goal.id !== goalId) return goal;
-                return { ...goal, status: goal.status === "completed" ? "active" : "completed" };
-            });
-        }
-        this.touchWorkspace();
-        this.persistWorkspace();
-        this.renderAll();
-    }
-
-    addHabit() {
-        const title = this.els.habitTitle.value.trim();
-        if (!title) {
-            this.toast("Name the habit first.", "warn");
-            return;
-        }
-        this.workspace.habits.push({
-            id: uid(),
-            title,
-            category: this.els.habitCategory.value,
-            goalId: this.els.habitGoal.value,
-            targetPerWeek: clamp(this.els.habitTarget.value, 1, 7, 5),
-            active: true,
-            createdAt: new Date().toISOString()
-        });
-        this.els.habitTitle.value = "";
-        this.touchWorkspace();
-        this.persistWorkspace();
-        this.renderAll();
-        this.toast("Habit added.", "success");
-    }
-
-    toggleHabit(habitId, dateKey, checked) {
-        const day = this.touchDay(dateKey);
-        day.habitChecks[habitId] = checked;
-        this.autoStatus(day);
-        this.persistDay(dateKey);
-        this.renderAll();
-    }
-
-    saveRecoveryPlan() {
-        this.workspace.recovery = {
-            addictionName: this.els.recoveryAddiction.value.trim() || "porn",
-            why: this.els.recoveryWhy.value.trim(),
-            triggers: uniqueLines(this.els.recoveryTriggers.value, 10),
-            rescuePlan: uniqueLines(this.els.recoveryPlan.value, 10)
-        };
-        this.touchWorkspace();
-        this.persistWorkspace();
-        this.renderAll();
-        this.toast("Recovery plan saved.", "success");
-    }
-
-    addReminder() {
-        const title = this.els.reminderTitle.value.trim();
-        if (!title) {
-            this.toast("Reminder needs a title.", "warn");
-            return;
-        }
-        this.workspace.reminders.push({
-            id: uid(),
-            title,
-            notes: this.els.reminderNotes.value.trim(),
-            date: this.els.reminderDate.value || this.todayKey,
-            time: this.els.reminderTime.value || "09:00",
-            category: this.els.reminderCategory.value,
-            goalId: "",
-            notify: this.els.reminderNotify.checked,
-            done: false,
-            lastNotifiedKey: "",
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-        });
-        this.els.reminderTitle.value = "";
-        this.els.reminderNotes.value = "";
-        this.touchWorkspace();
-        this.persistWorkspace();
-        this.renderAll();
-        this.toast("Reminder saved.", "success");
-    }
-
-    toggleReminder(reminderId, done) {
-        this.workspace.reminders = this.workspace.reminders.map((reminder) => {
-            if (reminder.id !== reminderId) return reminder;
-            return { ...reminder, done, updatedAt: new Date().toISOString() };
-        });
-        this.touchWorkspace();
-        this.persistWorkspace();
-        this.renderAll();
-    }
-
-    deleteReminder(reminderId) {
-        this.workspace.reminders = this.workspace.reminders.filter((reminder) => reminder.id !== reminderId);
-        this.touchWorkspace();
-        this.persistWorkspace();
-        this.renderAll();
-    }
-
-    saveNotificationSettings() {
-        const current = this.workspace.notificationSettings;
-        this.workspace.notificationSettings = {
-            ...current,
-            enabled: this.els.notifyEnabled.checked,
-            email: this.els.notifyEmail.value.trim(),
-            timezone: this.config.appTimezone || current.timezone || "Asia/Kolkata",
-            morningDigest: this.els.morningDigest.checked,
-            morningTime: this.els.morningTime.value || "07:30",
-            eveningReview: this.els.eveningReview.checked,
-            eveningTime: this.els.eveningTime.value || "21:30",
-            relapseShield: this.els.relapseShield.checked,
-            relapseShieldTime: this.els.relapseShieldTime.value || "22:45"
-        };
-        this.touchWorkspace();
-        this.persistWorkspace();
-        this.renderAll();
-        this.toast("Notification settings saved.", "success");
-    }
-
-    async sendTestNotification() {
-        this.saveNotificationSettings();
-        if (!this.hasCloudApi()) {
-            this.toast("Add apiBaseUrl in config.js before sending email.", "warn");
-            return;
-        }
-        const email = this.workspace.notificationSettings.email;
-        if (!email) {
-            this.toast("Add an email address first.", "warn");
-            return;
-        }
-        this.setSyncState("Sending test...");
-        try {
-            const response = await this.apiFetch("/api/notifications/test", {
-                method: "POST",
-                body: JSON.stringify({ email })
-            });
-            const payload = await response.json().catch(() => ({}));
-            if (!response.ok) {
-                throw new Error(payload.error || "Notification test failed");
-            }
-            this.setSyncState("Notification test sent");
-            this.toast("Test email sent.", "success");
-        } catch (error) {
-            this.setSyncState("Notification test failed");
-            this.toast(error.message || "Notification test failed.", "error");
-        }
-    }
-
-    persistDay(dateKey) {
-        this.saveLocal();
-        if (!this.hasCloudApi()) {
-            this.setSyncState("Saved on this device");
-            return;
-        }
-        clearTimeout(this.dayTimers.get(dateKey));
-        this.dayTimers.set(dateKey, setTimeout(() => this.pushDay(dateKey), 350));
-        this.setSyncState("Saved locally, syncing...");
-    }
-
-    persistWorkspace() {
-        this.saveLocal();
-        if (!this.hasCloudApi()) {
-            this.setSyncState("Saved on this device");
-            return;
-        }
-        clearTimeout(this.workspaceTimer);
-        this.workspaceTimer = setTimeout(() => this.pushWorkspace(), 450);
-        this.setSyncState("Saved locally, syncing...");
-    }
-
-    async pushDay(dateKey) {
-        const day = this.getDay(dateKey, false);
-        if (!day || !this.hasCloudApi()) return;
-        try {
-            const response = await this.apiFetch(`/api/days/${dateKey}`, {
-                method: "PUT",
-                body: JSON.stringify({ day })
-            });
-            const payload = await response.json().catch(() => ({}));
-            if (!response.ok) {
-                throw new Error(payload.error || `Sync failed (${response.status})`);
-            }
-            if (payload.day) {
-                this.days[dateKey] = this.normalizeDay(dateKey, payload.day);
-                this.saveLocal();
-            }
-            this.setSyncState(`Synced to ${payload.store || "cloud"}`);
-        } catch (error) {
-            this.setSyncState("Cloud sync paused");
-            this.toast("Saved locally. Cloud sync will retry when API settings are fixed.", "error");
-        }
-    }
-
-    async pushWorkspace() {
-        if (!this.hasCloudApi()) return;
-        try {
-            const response = await this.apiFetch("/api/workspace", {
-                method: "PUT",
-                body: JSON.stringify({ workspace: this.workspace })
-            });
-            const payload = await response.json().catch(() => ({}));
-            if (!response.ok) {
-                throw new Error(payload.error || `Sync failed (${response.status})`);
-            }
-            if (payload.workspace) {
-                this.workspace = this.normalizeWorkspace(payload.workspace);
-                this.saveLocal();
-            }
-            this.setSyncState(`Synced to ${payload.store || "cloud"}`);
-        } catch (error) {
-            this.setSyncState("Cloud sync paused");
-            this.toast("Workspace saved locally. Cloud sync needs API settings.", "error");
-        }
-    }
-
-    async syncFromCloud({ quiet = false } = {}) {
-        if (!this.hasCloudApi()) {
-            this.setSyncState("Saved on this device");
-            return;
-        }
-        if (!quiet) {
-            this.setSyncState("Syncing...");
-        }
-        try {
-            const response = await this.apiFetch(`/api/snapshot?year=${this.currentYear}`, { method: "GET" });
-            const payload = await response.json().catch(() => ({}));
-            if (!response.ok) {
-                throw new Error(payload.error || `Sync failed (${response.status})`);
-            }
-            this.days = this.mergeDayMaps(this.days, payload.days || {});
-            const incomingWorkspace = this.normalizeWorkspace(payload.workspace || {});
-            if (this.isBlankWorkspace(incomingWorkspace) && !this.isBlankWorkspace(this.workspace)) {
-                await this.pushWorkspace();
-            } else {
-                this.workspace = this.mergeWorkspace(this.workspace, incomingWorkspace);
-            }
-            if (payload.user?.email && !this.workspace.notificationSettings.email) {
-                this.workspace.notificationSettings.email = payload.user.email;
-            }
-            this.saveLocal();
-            this.setSyncState(`Synced to ${payload.primaryStore || "cloud"}`);
-            if (!quiet) {
-                this.toast("Sync complete.", "success");
-            }
-            this.renderAll();
-        } catch (error) {
-            this.setSyncState("Cloud sync unavailable");
-            if (!quiet) {
-                this.toast(error.message || "Cloud sync unavailable.", "error");
-            }
-        }
-    }
-
-    async apiFetch(path, options = {}) {
-        const headers = {
-            "Content-Type": "application/json",
-            "X-Demo-User": this.currentUser.uid,
-            ...(options.headers || {})
-        };
-
-        if (this.firebaseReady && this.firebaseAuth?.currentUser) {
-            try {
-                headers.Authorization = `Bearer ${await this.firebaseAuth.currentUser.getIdToken()}`;
-            } catch {
-                // Dev auth still uses X-Demo-User when Firebase Admin is not configured.
-            }
-        }
-
-        return fetch(`${this.apiBase}${path}`, { ...options, headers });
-    }
-
-    async handleAuthClick() {
-        if (this.firebaseReady && this.firebaseAuth?.currentUser) {
-            await signOut(this.firebaseAuth);
-            this.toast("Signed out.");
-            return;
-        }
-        if (!this.firebaseReady || !this.firebaseAuth) {
-            this.toast("Add Firebase browser config to enable sign in.", "warn");
-            return;
-        }
-        try {
-            const provider = new GoogleAuthProvider();
-            await signInWithPopup(this.firebaseAuth, provider);
-            this.toast("Signed in.", "success");
-        } catch {
-            this.toast("Sign in was not completed.", "error");
-        }
-    }
-
-    updateAuthUi() {
-        const name = this.currentUser.displayName || "Local player";
-        this.els.userName.textContent = name;
-        this.els.userAvatar.textContent = this.initials(name);
-        const signedIn = this.firebaseReady && this.firebaseAuth?.currentUser;
-        this.els.authButton.textContent = signedIn ? "Sign out" : "Sign in";
-    }
-
-    initials(name) {
-        return String(name || "DayForge")
-            .split(/\s+/)
-            .filter(Boolean)
-            .slice(0, 2)
-            .map((part) => part[0].toUpperCase())
-            .join("") || "DF";
-    }
-
-    setSyncState(message) {
-        this.els.syncState.textContent = message;
-    }
-
-    dayProgress(day) {
-        if (!day) return { done: 0, total: 0, pct: 0 };
-        const taskDone = day.tasks.filter((task) => task.done).length;
-        const activeHabitIds = this.workspace.habits.filter((habit) => habit.active).map((habit) => habit.id);
-        const habitDone = activeHabitIds.filter((id) => day.habitChecks[id]).length;
-        const total = day.tasks.length + activeHabitIds.length;
-        const done = taskDone + habitDone;
-        return { done, total, pct: total ? Math.round((done / total) * 100) : 0 };
-    }
-
-    dayXp(day) {
-        if (!day) return 0;
-        const taskXp = day.tasks.reduce((total, task) => total + (task.done ? XP_BY_PRIORITY[task.priority] || XP_BY_PRIORITY.medium : 0), 0);
-        const habitXp = Object.values(day.habitChecks || {}).filter(Boolean).length * 18;
-        const cleanBonus = this.isCleanLoggedDay(day) ? 25 : 0;
-        const winBonus = day.status === "won" ? 45 : 0;
-        return taskXp + habitXp + cleanBonus + winBonus;
-    }
-
-    isCleanLoggedDay(day) {
-        if (!day || day.relapse) return false;
-        const progress = this.dayProgress(day);
-        return progress.done > 0 || Boolean(day.focusLine || day.gratitude || day.reflection);
-    }
-
-    calculateStats() {
-        const allDays = Object.values(this.days);
-        const yearStart = `${this.currentYear}-01-01`;
-        const yearEnd = `${this.currentYear}-12-31`;
-        const yearDays = Object.entries(this.days)
-            .filter(([dateKey]) => dateKey >= yearStart && dateKey <= yearEnd)
-            .map(([, day]) => day);
-        const today = this.getDay(this.todayKey, false);
-        const todayProgress = this.dayProgress(today);
-        const dueToday = this.workspace.reminders.filter((reminder) => reminder.date === this.todayKey && !reminder.done);
-        const doneTasks = allDays.reduce((total, day) => total + day.tasks.filter((task) => task.done).length, 0);
-        const bossTasksDone = allDays.reduce((total, day) => total + day.tasks.filter((task) => task.done && task.priority === "high").length, 0);
-        const habitChecks = allDays.reduce((total, day) => total + Object.values(day.habitChecks || {}).filter(Boolean).length, 0);
-        const totalXp = allDays.reduce((total, day) => total + this.dayXp(day), 0);
-        const level = Math.floor(totalXp / LEVEL_SIZE) + 1;
-        const xpIntoLevel = totalXp % LEVEL_SIZE;
-        const cleanDays = allDays.filter((day) => this.isCleanLoggedDay(day)).length;
-        const wonDays = yearDays.filter((day) => day.status === "won").length;
-        const relapseDays = yearDays.filter((day) => day.relapse).length;
-        const urgeWins = allDays.filter((day) => day.urge >= 7 && !day.relapse && this.isCleanLoggedDay(day)).length;
-        const averageProgress = yearDays.length
-            ? Math.round(yearDays.reduce((total, day) => total + this.dayProgress(day).pct, 0) / yearDays.length)
-            : 0;
-        const streaks = this.calculateStreaks();
-
-        return {
-            totalXp,
-            level,
-            xpIntoLevel,
-            cleanDays,
-            wonDays,
-            relapseDays,
-            doneTasks,
-            bossTasksDone,
-            habitChecks,
-            urgeWins,
-            averageProgress,
-            currentStreak: streaks.current,
-            bestStreak: streaks.best,
-            todayProgress,
-            todayXp: this.dayXp(today),
-            todayUrge: today?.urge || 0,
-            dueToday: dueToday.length
-        };
-    }
-
-    calculateStreaks() {
-        const dateKeys = Object.keys(this.days).sort();
-        let best = 0;
-        let run = 0;
-        let previous = null;
-
-        dateKeys.forEach((dateKey) => {
-            const clean = this.isCleanLoggedDay(this.days[dateKey]);
-            if (!clean) {
-                run = 0;
-                previous = dateKey;
-                return;
-            }
-            if (!previous || toDateKey(addDays(parseDateKey(previous), 1)) === dateKey) {
-                run += 1;
-            } else {
-                run = 1;
-            }
-            best = Math.max(best, run);
-            previous = dateKey;
-        });
-
-        let current = 0;
-        let cursor = parseDateKey(this.todayKey);
-        if (!this.isCleanLoggedDay(this.days[this.todayKey])) {
-            cursor = addDays(cursor, -1);
-        }
-        while (true) {
-            const key = toDateKey(cursor);
-            if (!this.isCleanLoggedDay(this.days[key])) break;
-            current += 1;
-            cursor = addDays(cursor, -1);
-        }
-
-        return { current, best };
-    }
-
-    renderAll() {
-        this.todayKey = toDateKey(new Date());
-        this.updateAuthUi();
-        this.renderHeader();
-        this.renderStats();
-        this.renderDayPanel();
-        this.renderHeatmap();
-        this.renderHabitMatrix();
-        this.renderGoals();
-        this.renderRecovery();
-        this.renderReminders();
-        this.renderNotifications();
-        this.renderAwards();
-    }
-
-    renderHeader() {
-        const quote = QUOTES[Math.floor(Date.now() / 86400000) % QUOTES.length];
-        this.els.todayLabel.textContent = this.selectedDate === this.todayKey ? "Today" : formatHumanDate(this.selectedDate);
-        this.els.headlineText.textContent = this.workspace.profile.mission || "Build proof that you can trust yourself.";
-        this.els.quoteText.textContent = quote[0];
-        this.els.quoteAuthor.textContent = quote[1];
-        this.els.currentDateTitle.textContent = formatHumanDate(this.selectedDate);
-        this.els.currentYearDisplay.textContent = String(this.currentYear);
-        this.els.selectedDateInput.value = this.selectedDate;
-    }
-
-    renderStats() {
-        const stats = this.calculateStats();
-        this.els.levelNumber.textContent = stats.level;
-        this.els.xpLabel.textContent = `${stats.xpIntoLevel} / ${LEVEL_SIZE} XP`;
-        this.els.xpFill.style.width = `${Math.round((stats.xpIntoLevel / LEVEL_SIZE) * 100)}%`;
-        this.els.cleanStreak.textContent = stats.currentStreak;
-        this.els.bestStreak.textContent = stats.bestStreak;
-        this.els.statOverall.textContent = `${stats.averageProgress}%`;
-        this.els.statOverallSub.textContent = `${stats.wonDays} wins, ${stats.cleanDays} clean logs`;
-        this.els.statToday.textContent = `${stats.todayXp} XP`;
-        this.els.statTodaySub.textContent = `${stats.todayProgress.done}/${stats.todayProgress.total} items done`;
-        this.els.statUrge.textContent = `${stats.todayUrge} / 10`;
-        this.els.statUrgeSub.textContent = stats.todayUrge >= 7 ? "Run the rescue plan" : "Calm window";
-        this.els.statReminders.textContent = stats.dueToday;
-        this.els.statRemindersSub.textContent = stats.dueToday ? "Open loops today" : "No reminders due";
-
-        if (stats.level > this.lastLevel) {
-            this.toast(`Level ${stats.level} unlocked. Keep stacking proof.`, "success");
-        }
-        this.lastLevel = stats.level;
-    }
-
-    renderDayPanel() {
-        const day = this.getDay(this.selectedDate, true);
-        const progress = this.dayProgress(day);
-        const xp = this.dayXp(day);
-
-        this.els.focusLineInput.value = day.focusLine;
-        this.els.moodRange.value = day.mood;
-        this.els.energyRange.value = day.energy;
-        this.els.urgeRange.value = day.urge;
-        this.els.relapseCheck.checked = day.relapse;
-        this.els.gratitudeInput.value = day.gratitude;
-        this.els.reflectionInput.value = day.reflection;
-        this.els.progressRing.style.setProperty("--progress", progress.pct);
-        this.els.progressNumber.textContent = `${progress.pct}%`;
-        this.els.progressLabel.textContent = progress.total ? `${progress.done} of ${progress.total} complete` : "No quests yet";
-        this.els.progressXp.textContent = `${xp} XP`;
-        this.els.progressHint.textContent = day.relapse ? "Logged honestly. Restart with one rescue action." : this.progressHint(progress.pct);
-        this.renderGoalOptions();
-        this.renderTaskList(day);
-    }
-
-    progressHint(pct) {
-        if (pct === 100) return "Clean win. Lock in the lesson.";
-        if (pct >= 70) return "Close enough to finish strong.";
-        if (pct >= 30) return "Momentum exists. Add the next rep.";
-        return "A small start beats a perfect plan.";
-    }
-
-    renderGoalOptions() {
-        const options = ['<option value="">No goal</option>']
-            .concat(this.workspace.goals.map((goal) => `<option value="${escapeHtml(goal.id)}">${escapeHtml(goal.title)}</option>`))
-            .join("");
-        const currentTaskGoal = this.els.newTaskGoal.value;
-        const currentHabitGoal = this.els.habitGoal.value;
-        this.els.newTaskGoal.innerHTML = options;
-        this.els.habitGoal.innerHTML = options;
-        this.els.newTaskGoal.value = currentTaskGoal;
-        this.els.habitGoal.value = currentHabitGoal;
-    }
-
-    renderTaskList(day) {
-        if (!day.tasks.length) {
-            this.els.taskList.innerHTML = '<div class="task-empty">Add one task that proves today is not wasted.</div>';
-            return;
-        }
-
-        this.els.taskList.innerHTML = day.tasks.map((task) => {
-            const goal = this.workspace.goals.find((item) => item.id === task.goalId);
-            return `
-                <div class="task-row ${task.done ? "done" : ""}">
-                    <input type="checkbox" data-task-check="${escapeHtml(task.id)}" ${task.done ? "checked" : ""} aria-label="Toggle task">
-                    <div>
-                        <span class="task-title">${escapeHtml(task.title)}</span>
-                        <div class="task-meta">
-                            <span class="pill ${escapeHtml(task.priority)}">${PRIORITY_LABELS[task.priority] || "Core"}</span>
-                            <span class="pill">${task.estimateMins} min</span>
-                            ${goal ? `<span class="pill">${escapeHtml(goal.title)}</span>` : ""}
-                        </div>
-                    </div>
-                    <button class="tiny-button" type="button" data-task-delete="${escapeHtml(task.id)}">Delete</button>
-                </div>
-            `;
-        }).join("");
-    }
-
-    renderHeatmap() {
-        const start = new Date(this.currentYear, 0, 1);
-        const end = new Date(this.currentYear, 11, 31);
-        const buttons = [];
-        for (let date = new Date(start); date <= end; date = addDays(date, 1)) {
-            const dateKey = toDateKey(date);
-            const day = this.getDay(dateKey, false);
-            const progress = this.dayProgress(day);
-            const classes = ["heat-day"];
-            if (dateKey === this.selectedDate) classes.push("selected");
-            if (dateKey === this.todayKey) classes.push("today");
-            if (day?.relapse) classes.push("relapse");
-            else if (day?.status === "won") classes.push("won");
-            else if (day?.status === "missed") classes.push("missed");
-            else if (progress.pct >= 50) classes.push("partial");
-            else if (day && (day.tasks.length || Object.keys(day.habitChecks || {}).length || day.focusLine)) classes.push("planned");
-            buttons.push(`<button class="${classes.join(" ")}" type="button" data-date-key="${dateKey}" title="${formatHumanDate(dateKey)}: ${progress.pct}%"></button>`);
-        }
-        this.els.heatmapGrid.innerHTML = buttons.join("");
-        this.els.heatmapGrid.querySelectorAll("[data-date-key]").forEach((button) => {
-            button.addEventListener("click", () => this.selectDate(button.dataset.dateKey));
-        });
-    }
-
-    renderHabitMatrix() {
-        const habits = this.workspace.habits.filter((habit) => habit.active);
-        if (!habits.length) {
-            this.els.habitMatrix.innerHTML = '<div class="empty-state">Add habits to build your matrix.</div>';
-            return;
-        }
-
-        const end = parseDateKey(this.selectedDate);
-        const dates = Array.from({ length: 21 }, (_, index) => toDateKey(addDays(end, index - 20)));
-        const header = `
-            <div class="habit-row header">
-                <span>Habit</span>
-                ${dates.map((dateKey) => `<span class="habit-cell ${dateKey === this.todayKey ? "today" : ""}">${Number(dateKey.slice(-2))}</span>`).join("")}
-                <span class="habit-score">Score</span>
+    return run;
+}
+
+function disciplineScore() {
+    const data = monthlyStats();
+    return Math.round(data.reduce((sum, item) => sum + item.value, 0) / data.length + Math.min(streak(), 20) * 0.55);
+}
+
+function categoryCount(category) {
+    return state.habits.filter((habit) => category === "All" || habit.category === category).length;
+}
+
+function iconClass(name) {
+    return `habit-icon ${name || "spark"}`;
+}
+
+function pageMeta() {
+    const date = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+    const map = {
+        dashboard: ["Good morning, June ✨", "Small actions. Remarkable life."],
+        today: ["Today", `${date}. Your day, your flow.`],
+        habits: ["My Habits", "Build the life you envision, one habit at a time."],
+        goals: ["Goals", "Connect daily behavior to the person you are becoming."],
+        calendar: ["Calendar", "Track your daily progress and build lasting rhythm."],
+        analytics: ["Analytics", "Deep insights into your habits, growth, and potential."],
+        coach: ["AI Coach ✨", "Your personal guide to becoming your best self."],
+        journal: ["Journal", "Reflect, learn, and make tomorrow easier."],
+        rewards: ["Rewards", "Celebrate proof, streaks, badges, and progress."],
+        settings: ["Settings", "Customize Lumina around your routine."]
+    };
+    return map[state.page] || map.dashboard;
+}
+
+function render() {
+    document.body.dataset.theme = state.theme;
+    renderNav();
+    const [title, subtitle] = pageMeta();
+    els.title.textContent = title;
+    els.subtitle.textContent = subtitle;
+    els.themeToggle.textContent = state.theme === "dark" ? "☀" : "☾";
+    const pages = {
+        dashboard: renderDashboard,
+        today: renderToday,
+        habits: renderHabits,
+        goals: renderGoals,
+        calendar: renderCalendar,
+        analytics: renderAnalytics,
+        coach: renderCoach,
+        journal: renderJournal,
+        rewards: renderRewards,
+        settings: renderSettings
+    };
+    els.content.innerHTML = `<div class="page-motion">${(pages[state.page] || renderDashboard)()}</div>`;
+    bindPageEvents();
+}
+
+function renderNav() {
+    els.nav.innerHTML = navItems.map(([id, label, icon]) => `
+        <button class="nav-item ${state.page === id ? "active" : ""}" data-page="${id}" type="button">
+            <span>${icon}</span>
+            ${label}
+        </button>
+    `).join("");
+}
+
+function progressRing(pct, size = "large", label = "Completed") {
+    return `
+        <div class="progress-ring ${size}" style="--value:${pct}">
+            <svg viewBox="0 0 120 120" aria-hidden="true">
+                <circle class="ring-bg" cx="60" cy="60" r="50"></circle>
+                <circle class="ring-fg" cx="60" cy="60" r="50"></circle>
+            </svg>
+            <div class="ring-center">
+                <strong>${pct}%</strong>
+                <span>${label}</span>
             </div>
-        `;
+        </div>
+    `;
+}
 
-        const rows = habits.map((habit) => {
-            const checkedCount = dates.filter((dateKey) => this.days[dateKey]?.habitChecks?.[habit.id]).length;
-            return `
-                <div class="habit-row">
-                    <span class="habit-name">${escapeHtml(habit.title)}</span>
-                    ${dates.map((dateKey) => {
-                        const checked = this.days[dateKey]?.habitChecks?.[habit.id];
-                        return `
-                            <label class="habit-cell ${dateKey === this.todayKey ? "today" : ""}" title="${escapeHtml(habit.title)} on ${dateKey}">
-                                <input type="checkbox" data-habit-check="${escapeHtml(habit.id)}" data-date-key="${dateKey}" ${checked ? "checked" : ""}>
-                            </label>
-                        `;
-                    }).join("")}
-                    <span class="habit-score">${checkedCount}/21</span>
+function miniBars(data, tone = "violet") {
+    const max = Math.max(...data.map((item) => item.value), 100);
+    return `
+        <div class="mini-bars ${tone}">
+            ${data.map((item) => `<span style="height:${Math.max(10, (item.value / max) * 100)}%" title="${item.name}: ${item.value}%"></span>`).join("")}
+        </div>
+    `;
+}
+
+function lineChart(data, tone = "violet") {
+    const points = data.map((item, index) => {
+        const x = (index / Math.max(1, data.length - 1)) * 100;
+        const y = 88 - item.value * 0.72;
+        return `${x},${y}`;
+    }).join(" ");
+    return `
+        <svg class="line-chart ${tone}" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+                <linearGradient id="lineFill-${tone}" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stop-color="currentColor" stop-opacity="0.26"/>
+                    <stop offset="100%" stop-color="currentColor" stop-opacity="0"/>
+                </linearGradient>
+            </defs>
+            <polyline points="${points}" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"></polyline>
+            <polygon points="0,100 ${points} 100,100" fill="url(#lineFill-${tone})"></polygon>
+        </svg>
+    `;
+}
+
+function heatmap(days = 35) {
+    const today = new Date();
+    return `
+        <div class="heatmap">
+            ${Array.from({ length: days }, (_, index) => {
+                const key = toDateKey(addDays(today, index - days + 1));
+                const pct = completionStats(key).pct;
+                const level = pct >= 85 ? 4 : pct >= 60 ? 3 : pct >= 30 ? 2 : pct > 0 ? 1 : 0;
+                return `<button class="heat-cell l${level}" data-date="${key}" title="${key}: ${pct}%" type="button"></button>`;
+            }).join("")}
+        </div>
+    `;
+}
+
+function todayHabitRows(limit = state.habits.length) {
+    const map = completedFor(todayKey());
+    return state.habits.slice(0, limit).map((habit) => `
+        <label class="habit-row" data-habit-row="${habit.id}">
+            <span class="${iconClass(habit.icon)}"></span>
+            <span>
+                <strong>${escapeHtml(habit.title)}</strong>
+                <em>${escapeHtml(habit.category)}</em>
+            </span>
+            <small>${escapeHtml(habit.reminder)}</small>
+            <input type="checkbox" data-complete="${habit.id}" ${map[habit.id] ? "checked" : ""}>
+        </label>
+    `).join("");
+}
+
+function renderDashboard() {
+    const stats = completionStats();
+    const weekly = Array.from({ length: 7 }, (_, i) => {
+        const key = toDateKey(addDays(new Date(), i - 6));
+        return { name: ["M", "T", "W", "T", "F", "S", "S"][i], value: completionStats(key).pct };
+    });
+    return `
+        <section class="dashboard-grid">
+            <article class="glass-card mission-card">
+                <div class="card-title">
+                    <span class="gold">✦</span>
+                    <h2>Today's Mission</h2>
+                    <button class="ghost-dots" type="button">...</button>
                 </div>
-            `;
-        }).join("");
-
-        this.els.habitMatrix.innerHTML = `<div class="habit-table">${header}${rows}</div>`;
-    }
-
-    renderGoals() {
-        if (!this.workspace.goals.length) {
-            this.els.goalList.innerHTML = '<div class="empty-state">Add a goal so tasks have a destination.</div>';
-            return;
-        }
-
-        this.els.goalList.innerHTML = this.workspace.goals.map((goal) => {
-            const relatedTasks = Object.values(this.days).flatMap((day) => day.tasks).filter((task) => task.goalId === goal.id);
-            const done = relatedTasks.filter((task) => task.done).length;
-            const pct = relatedTasks.length ? Math.round((done / relatedTasks.length) * 100) : 0;
-            return `
-                <div class="goal-card">
-                    <div class="goal-top">
-                        <strong>${escapeHtml(goal.title)}</strong>
-                        <div>
-                            <button class="tiny-button" type="button" data-goal-action="complete" data-goal-id="${escapeHtml(goal.id)}">${goal.status === "completed" ? "Reopen" : "Done"}</button>
-                            <button class="tiny-button" type="button" data-goal-action="delete" data-goal-id="${escapeHtml(goal.id)}">Delete</button>
-                        </div>
-                    </div>
-                    <p>${escapeHtml(goal.why || "Give this goal a reason that can pull you through low-mood days.")}</p>
-                    <div class="progress-bar"><span style="width:${pct}%"></span></div>
-                    <div class="goal-meta">
-                        <span class="pill">${pct}% task proof</span>
-                        ${goal.targetDate ? `<span class="pill">Target ${escapeHtml(goal.targetDate)}</span>` : ""}
-                        <span class="pill">${escapeHtml(goal.status)}</span>
+                <div class="mission-body">
+                    ${progressRing(stats.pct)}
+                    <div class="mission-stats">
+                        <div><strong>${streak()}</strong><span>Day Streak</span><small>Keep it glowing</small></div>
+                        <div><strong>${disciplineScore()}</strong><span>Discipline Score</span><small>+12 pts from yesterday</small></div>
+                        <div><strong>${stats.done} / ${stats.total}</strong><span>Habits Completed</span><small>Today</small></div>
                     </div>
                 </div>
-            `;
-        }).join("");
-    }
+            </article>
 
-    renderRecovery() {
-        const recovery = this.workspace.recovery;
-        this.els.recoveryAddiction.value = recovery.addictionName || "porn";
-        this.els.recoveryWhy.value = recovery.why || "";
-        this.els.recoveryTriggers.value = (recovery.triggers || []).join("\n");
-        this.els.recoveryPlan.value = (recovery.rescuePlan || []).join("\n");
+            <article class="glass-card flow-card">
+                <div class="card-title">
+                    <h2>Your Day, Your Flow</h2>
+                    <button class="pill-btn" type="button">Edit Routine</button>
+                </div>
+                <div class="timeline">
+                    <div><b>Morning</b><span>6 habits</span></div>
+                    <div><b>Afternoon</b><span>4 habits</span></div>
+                    <div><b>Evening</b><span>3 habits</span></div>
+                </div>
+                <div class="routine-grid">
+                    ${routineItem("Meditate", "15 min", "leaf")}
+                    ${routineItem("Deep Work", "50 min", "bolt")}
+                    ${routineItem("Read", "20 min", "book")}
+                    ${routineItem("Drink Water", "2.0 L", "drop")}
+                    ${routineItem("Walk Outside", "20 min", "spark")}
+                    ${routineItem("Reflect", "10 min", "moon")}
+                </div>
+            </article>
 
-        const plan = recovery.rescuePlan?.length ? recovery.rescuePlan : this.defaultWorkspace().recovery.rescuePlan;
-        this.els.panicPlanList.innerHTML = plan.map((step, index) => `
-            <div class="panic-step">
-                <span>${index + 1}</span>
-                <p>${escapeHtml(step)}</p>
-            </div>
-        `).join("");
-    }
+            <article class="glass-card coach-card compact">
+                <div class="card-title"><h2>AI Coach</h2><button class="ghost-dots">...</button></div>
+                <div class="coach-orb">⌣</div>
+                <strong>You're building incredible momentum.</strong>
+                <p>Focus on consistency over perfection today.</p>
+                <button class="btn soft" data-page-jump="coach" type="button">See Suggestions</button>
+            </article>
 
-    renderReminders() {
-        const sorted = [...this.workspace.reminders].sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
-        if (!sorted.length) {
-            this.els.reminderList.innerHTML = '<div class="empty-state">Save contests, meetings, focus blocks, and recovery guardrails here.</div>';
-            return;
-        }
-        this.els.reminderList.innerHTML = sorted.map((reminder) => `
-            <div class="reminder-row ${reminder.done ? "done" : ""}">
-                <input type="checkbox" data-reminder-check="${escapeHtml(reminder.id)}" ${reminder.done ? "checked" : ""} aria-label="Toggle reminder">
+            <article class="glass-card habits-card">
+                <div class="card-title">
+                    <h2>Today's Habits</h2>
+                    <span class="soft-pill">${stats.done} / ${stats.total} completed</span>
+                </div>
+                <div class="habit-list">${todayHabitRows(6)}</div>
+            </article>
+
+            <article class="glass-card focus-card">
+                <div class="card-title"><h2>Focus Timer</h2><span class="soft-pill">Pomodoro</span></div>
+                ${progressRing(72, "medium", "Focus Time")}
+                <div class="timer-text">25:00</div>
+                <button class="round-play" type="button">▶</button>
+            </article>
+
+            <article class="glass-card hydration-card">
+                <div class="card-title"><h2>Hydration</h2><span>2.0 / 2.5 L</span></div>
+                ${progressRing(80, "small", "Great job")}
+            </article>
+
+            <article class="glass-card chart-card">
+                <div class="card-title"><h2>Weekly Progress</h2><span class="soft-pill">Live</span></div>
+                ${miniBars(weekly)}
+            </article>
+
+            <article class="glass-card heat-card">
+                <div class="card-title"><h2>Habit Calendar</h2><span class="soft-pill">Mini heatmap</span></div>
+                ${heatmap(42)}
+            </article>
+
+            <article class="glass-card quote-card">
+                <blockquote>You don't have to be great to start, but you have to start to be great.</blockquote>
+                <span>Zig Ziglar</span>
+                <div class="quote-gem">◇</div>
+            </article>
+
+            <article class="glass-card ai-banner">
                 <div>
-                    <div class="reminder-top">
-                        <strong>${escapeHtml(reminder.title)}</strong>
-                    </div>
-                    <p>${escapeHtml(reminder.notes || "")}</p>
-                    <div class="reminder-meta">
-                        <span class="pill">${escapeHtml(reminder.date)} ${escapeHtml(reminder.time)}</span>
-                        <span class="pill">${escapeHtml(reminder.category)}</span>
-                        <span class="pill">${reminder.notify ? "Notify" : "No email"}</span>
-                    </div>
+                    <h2>AI Suggestion</h2>
+                    <p>You've been crushing your goals. Add a 10-minute evening stretch to improve recovery and sleep quality.</p>
                 </div>
-                <button class="tiny-button" type="button" data-reminder-delete="${escapeHtml(reminder.id)}">Delete</button>
+                <button class="btn soft" type="button">Add to Today</button>
+            </article>
+        </section>
+    `;
+}
+
+function routineItem(title, time, icon) {
+    return `<div class="routine-item"><span class="${iconClass(icon)}"></span><strong>${title}</strong><em>${time}</em></div>`;
+}
+
+function renderToday() {
+    const stats = completionStats();
+    return `
+        <section class="two-col">
+            <article class="glass-card hero-today">
+                <div>
+                    <span class="kicker">Today's Mission</span>
+                    <h2>Move through the day with calm precision.</h2>
+                    <p>Plan the important things first, then let the checklist carry you.</p>
+                </div>
+                ${progressRing(stats.pct)}
+            </article>
+
+            <article class="glass-card">
+                <div class="card-title"><h2>Motivational Quote</h2><span class="gold">✦</span></div>
+                <blockquote class="big-quote">Small habits, remarkable life.</blockquote>
+                <p class="muted">Consistency today, transformation tomorrow.</p>
+            </article>
+        </section>
+
+        <section class="content-grid">
+            <article class="glass-card wide">
+                <div class="card-title"><h2>Routine Flow Timeline</h2><button class="pill-btn">Edit Routine</button></div>
+                <div class="flow-line">
+                    <div><span></span><strong>Morning</strong><small>Meditate, water, plan</small></div>
+                    <div><span></span><strong>Afternoon</strong><small>Deep work, walk</small></div>
+                    <div><span></span><strong>Evening</strong><small>Read, reflect, sleep</small></div>
+                </div>
+            </article>
+            <article class="glass-card wide">
+                <div class="card-title"><h2>Habit Checklist</h2><span class="soft-pill">${stats.done} of ${stats.total}</span></div>
+                <div class="habit-list">${todayHabitRows()}</div>
+            </article>
+            <article class="glass-card">${pomodoroUi()}</article>
+            <article class="glass-card">
+                <div class="card-title"><h2>Hydration Tracker</h2><span>80%</span></div>
+                ${progressRing(80, "small", "2.0 L")}
+                <div class="stepper-row"><button>-</button><strong>2.0 / 2.5 L</strong><button>+</button></div>
+            </article>
+            <article class="glass-card">
+                <div class="card-title"><h2>Mood Check-in</h2><span>How are you?</span></div>
+                <div class="mood-row">${["Low", "Meh", "Calm", "Happy", "Tired"].map((m, i) => `<button class="${i === 3 ? "active" : ""}">${m}</button>`).join("")}</div>
+                <input class="soft-input" value="Grateful, motivated, optimistic">
+            </article>
+            <article class="glass-card ai-banner wide">
+                <div><h2>AI Suggestion</h2><p>Protect your first focus block. It is your highest leverage window today.</p></div>
+                <button class="btn soft">Add focus block</button>
+            </article>
+        </section>
+    `;
+}
+
+function pomodoroUi() {
+    return `
+        <div class="card-title"><h2>Pomodoro Focus</h2><span class="soft-pill">25 min</span></div>
+        ${progressRing(64, "medium", "Focus")}
+        <div class="timer-text">25:00</div>
+        <button class="round-play">▶</button>
+    `;
+}
+
+function renderHabits() {
+    const categories = ["All", ...state.categories];
+    const selected = sessionStorage.getItem("lumina_category") || "All";
+    const habits = state.habits.filter((habit) => selected === "All" || habit.category === selected);
+    const selectedHabit = habits[0] || state.habits[0];
+    return `
+        <section class="habits-layout">
+            <div class="left-stack">
+                <div class="category-row">
+                    ${categories.map((cat) => `<button class="category-card ${cat === selected ? "active" : ""}" data-category="${cat}"><span>${cat}</span><strong>${categoryCount(cat)} habits</strong></button>`).join("")}
+                    <button class="btn primary" data-open-habit-modal>New Habit</button>
+                </div>
+                <article class="glass-card">
+                    <div class="habit-table">
+                        ${habits.map((habit) => habitTableRow(habit)).join("")}
+                    </div>
+                </article>
+                <article class="glass-card mountain-card">
+                    <strong>Small habits, remarkable life.</strong>
+                    <span>Consistency today, transformation tomorrow.</span>
+                </article>
             </div>
-        `).join("");
-    }
+            <aside class="right-stack">
+                ${habitDetail(selectedHabit)}
+                <article class="glass-card">
+                    <div class="card-title"><h2>Current Streaks</h2><span class="gold">✦</span></div>
+                    ${state.habits.slice(0, 4).map((habit) => `<div class="streak-row"><span class="${iconClass(habit.icon)}"></span><strong>${habit.title}</strong><em>${habit.streak} days</em></div>`).join("")}
+                </article>
+                <article class="glass-card">
+                    <div class="card-title"><h2>Weekly Heatmap</h2></div>
+                    ${heatmap(49)}
+                </article>
+            </aside>
+        </section>
+    `;
+}
 
-    renderNotifications() {
-        const settings = this.workspace.notificationSettings;
-        this.els.notifyEmail.value = settings.email || this.currentUser.email || "";
-        this.els.notifyEnabled.checked = Boolean(settings.enabled);
-        this.els.morningDigest.checked = settings.morningDigest !== false;
-        this.els.morningTime.value = settings.morningTime || "07:30";
-        this.els.eveningReview.checked = settings.eveningReview !== false;
-        this.els.eveningTime.value = settings.eveningTime || "21:30";
-        this.els.relapseShield.checked = settings.relapseShield !== false;
-        this.els.relapseShieldTime.value = settings.relapseShieldTime || "22:45";
-    }
+function habitTableRow(habit) {
+    const pct = habitProgress(habit.id);
+    return `
+        <div class="habit-table-row">
+            <span class="${iconClass(habit.icon)}"></span>
+            <div><strong>${escapeHtml(habit.title)}</strong><small>${escapeHtml(habit.description)}</small></div>
+            <div class="streak-fire"><b>${habit.streak}</b><small>day streak</small></div>
+            <span class="soft-pill">${escapeHtml(habit.frequency)}</span>
+            ${progressRing(pct, "tiny", "")}
+            <div class="row-actions">
+                <button data-edit-habit="${habit.id}" title="Edit">✎</button>
+                <button data-delete-habit="${habit.id}" title="Delete">×</button>
+            </div>
+        </div>
+    `;
+}
 
-    renderAwards() {
-        const stats = this.calculateStats();
-        const unlocked = AWARDS.filter((award) => award.rule(stats));
-        this.els.awardsGrid.innerHTML = AWARDS.map((award) => {
-            const isUnlocked = award.rule(stats);
-            return `
-                <div class="award-card ${isUnlocked ? "unlocked" : ""}">
-                    <div class="award-top">
-                        <span class="award-medal">${escapeHtml(award.code)}</span>
-                        <span class="pill">${isUnlocked ? "Unlocked" : "Locked"}</span>
-                    </div>
-                    <strong>${escapeHtml(award.title)}</strong>
-                    <p>${escapeHtml(award.desc)}</p>
-                    <div class="award-meta">
-                        <span class="pill">${isUnlocked ? "Profile proof" : "Keep building"}</span>
-                    </div>
+function habitProgress(habitId) {
+    const keys = Object.keys(state.completions).slice(-30);
+    if (!keys.length) return 0;
+    const done = keys.filter((key) => state.completions[key]?.[habitId]).length;
+    return Math.round((done / keys.length) * 100);
+}
+
+function habitDetail(habit) {
+    if (!habit) return "";
+    const pct = habitProgress(habit.id);
+    return `
+        <article class="glass-card detail-panel">
+            <div class="card-title">
+                <h2><span class="${iconClass(habit.icon)}"></span>${escapeHtml(habit.title)}</h2>
+                <label class="switch"><input type="checkbox" checked><span></span></label>
+            </div>
+            <div class="detail-score">
+                ${progressRing(pct, "medium", "Completed")}
+                <div><strong>${habit.streak}</strong><span>Day streak</span><small>Best: ${habit.streak + 6} days</small></div>
+            </div>
+            <p>${escapeHtml(habit.description)}</p>
+            <div class="weekday-row">${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d, i) => `<span class="${i < 5 ? "on" : ""}">${d}</span>`).join("")}</div>
+            <label class="field-label">Reminder<input class="soft-input" value="${escapeHtml(habit.reminder)}"></label>
+            <button class="btn primary" data-complete="${habit.id}">Mark as Done</button>
+        </article>
+    `;
+}
+
+function renderGoals() {
+    const filter = sessionStorage.getItem("lumina_goal_filter") || "All";
+    const categories = ["All", "Wellness", "Productivity", "Growth"];
+    const goals = state.goals.filter((goal) => filter === "All" || goal.category === filter);
+    return `
+        <section class="goal-page">
+            <div class="category-row">
+                ${categories.map((cat) => `<button class="category-card ${filter === cat ? "active" : ""}" data-goal-filter="${cat}"><span>${cat}</span><strong>${cat === "All" ? state.goals.length : state.goals.filter((g) => g.category === cat).length} goals</strong></button>`).join("")}
+                <button class="btn primary" data-open-goal-modal>Add Goal</button>
+            </div>
+            <div class="goal-grid">
+                ${goals.map((goal) => `
+                    <article class="glass-card goal-card">
+                        <div class="card-title"><h2>${escapeHtml(goal.title)}</h2><span class="soft-pill">${escapeHtml(goal.category)}</span></div>
+                        <div class="progress-bar"><span style="width:${goal.progress}%"></span></div>
+                        <div class="goal-meta"><strong>${goal.progress}%</strong><span>Deadline ${escapeHtml(goal.deadline)}</span></div>
+                        <h3>Linked habits</h3>
+                        <div class="linked-habits">${goal.habits.map((id) => {
+                            const habit = state.habits.find((item) => item.id === id);
+                            return habit ? `<span>${escapeHtml(habit.title)}</span>` : "";
+                        }).join("")}</div>
+                        <h3>Milestones</h3>
+                        <ul>${goal.milestones.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+                    </article>
+                `).join("")}
+            </div>
+        </section>
+    `;
+}
+
+function renderCalendar() {
+    const selected = state.selectedDate || todayKey();
+    const monthDate = new Date(selected);
+    const year = monthDate.getFullYear();
+    const month = monthDate.getMonth();
+    const first = new Date(year, month, 1);
+    const start = addDays(first, -((first.getDay() + 6) % 7));
+    const cells = Array.from({ length: 42 }, (_, index) => addDays(start, index));
+    const selectedStats = completionStats(selected);
+    return `
+        <section class="calendar-layout">
+            <div class="calendar-main">
+                <div class="glass-card calendar-strip">
+                    ${Array.from({ length: 7 }, (_, i) => {
+                        const d = addDays(new Date(), i - 3);
+                        const key = toDateKey(d);
+                        return `<button class="${key === selected ? "active" : ""}" data-select-date="${key}"><span>${d.toLocaleDateString("en-US", { weekday: "short" })}</span><strong>${d.getDate()}</strong><em>${completionStats(key).done}/${state.habits.length}</em></button>`;
+                    }).join("")}
                 </div>
-            `;
-        }).join("");
+                <article class="glass-card">
+                    <div class="card-title"><h2>${monthDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}</h2><span class="soft-pill">All Habits</span></div>
+                    <div class="month-grid">
+                        ${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => `<b>${d}</b>`).join("")}
+                        ${cells.map((date) => {
+                            const key = toDateKey(date);
+                            const stats = completionStats(key);
+                            return `
+                                <button class="day-cell ${date.getMonth() !== month ? "muted" : ""} ${key === selected ? "selected" : ""}" data-select-date="${key}">
+                                    <span>${date.getDate()}</span>
+                                    <div>${state.habits.slice(0, 6).map((habit) => `<i class="${completedFor(key)[habit.id] ? "done" : ""}"></i>`).join("")}</div>
+                                    <em>${stats.pct}%</em>
+                                </button>
+                            `;
+                        }).join("")}
+                    </div>
+                </article>
+                <div class="two-col tight">
+                    <article class="glass-card"><div class="card-title"><h2>Upcoming Reminders</h2><span>View All</span></div>${state.habits.slice(0, 3).map((h) => `<div class="streak-row"><span class="${iconClass(h.icon)}"></span><strong>${h.title}</strong><em>${h.reminder}</em></div>`).join("")}</article>
+                    <article class="glass-card"><div class="card-title"><h2>Consistency is your superpower</h2></div>${miniBars(monthlyStats().slice(-16), "rose")}</article>
+                </div>
+            </div>
+            <aside class="right-stack">
+                <article class="glass-card day-detail">
+                    <div class="card-title"><h2>${new Date(selected).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</h2><button class="pill-btn">Edit Day</button></div>
+                    ${progressRing(selectedStats.pct)}
+                    <div class="habit-list">${state.habits.map((habit) => {
+                        const done = completedFor(selected)[habit.id];
+                        return `<label class="habit-row"><span class="${iconClass(habit.icon)}"></span><span><strong>${habit.title}</strong><em>${habit.category}</em></span><input type="checkbox" data-date-complete="${selected}" data-complete="${habit.id}" ${done ? "checked" : ""}></label>`;
+                    }).join("")}</div>
+                </article>
+                <article class="glass-card"><div class="card-title"><h2>This Month</h2></div>${statLine("Completion Rate", "82%")}${statLine("Days Completed", "19 / 30")}${statLine("Longest Streak", `${streak() + 5} days`)}${statLine("Total XP Earned", "2,450")}</article>
+                <article class="glass-card trophy-card"><div class="trophy">◇</div><strong>${streak()}</strong><span>Day Streak</span><p>You're on fire.</p></article>
+            </aside>
+        </section>
+    `;
+}
 
-        const bestAward = unlocked.at(-1);
-        const text = [
-            "DayForge progress update:",
-            `Clean streak: ${stats.currentStreak} days. Best streak: ${stats.bestStreak} days.`,
-            `Completed tasks: ${stats.doneTasks}. Habit checks: ${stats.habitChecks}. Level: ${stats.level}.`,
-            bestAward ? `Latest badge: ${bestAward.title}.` : "Current badge target: First Clean Day.",
-            "Building focus, recovery, and execution one honest day at a time."
-        ].join("\n");
-        this.els.linkedinText.value = text;
-    }
+function statLine(label, value) {
+    return `<div class="stat-line"><span>${label}</span><strong>${value}</strong></div>`;
+}
 
-    async copyLinkedInText() {
-        const text = this.els.linkedinText.value;
-        try {
-            await navigator.clipboard.writeText(text);
-            this.toast("LinkedIn text copied.", "success");
-        } catch {
-            this.els.linkedinText.focus();
-            this.els.linkedinText.select();
-            this.toast("Text selected for copying.", "warn");
-        }
-    }
+function renderAnalytics() {
+    const month = monthlyStats();
+    const week = month.slice(-7).map((item, i) => ({ name: `Week ${i + 1}`, value: item.value }));
+    return `
+        <section class="analytics-grid">
+            <article class="glass-card">${progressRing(completionStats().pct, "medium")}<h2>Overall Completion</h2></article>
+            ${scoreCard("Discipline Score", disciplineScore(), "Strong")}
+            ${scoreCard("Focus Score", 82, "Focused")}
+            ${scoreCard("Consistency Score", 73, "Steady")}
+            <article class="glass-card chart-wide"><div class="card-title"><h2>Weekly Progress</h2><span>This Month</span></div>${miniBars(week)}</article>
+            <article class="glass-card chart-wide"><div class="card-title"><h2>Monthly Progress</h2><span>This Year</span></div>${miniBars(month.slice(0, 12), "gold")}</article>
+            <article class="glass-card chart-wide"><div class="card-title"><h2>Streak Trends</h2></div>${lineChart(month, "violet")}</article>
+            <article class="glass-card analytics-heat"><div class="card-title"><h2>Habit Completion Heatmap</h2></div>${heatmap(70)}</article>
+            <article class="glass-card">${topHabits("Top Performing Habits", true)}</article>
+            <article class="glass-card">${topHabits("Needs More Attention", false)}</article>
+            <article class="glass-card chart-wide"><div class="card-title"><h2>Mood vs Productivity</h2></div>${lineChart(month.slice(-18), "rose")}</article>
+            <article class="glass-card">${donut("Focus Time Distribution", 68)}</article>
+            <article class="glass-card radar-card"><div class="card-title"><h2>Discipline Breakdown</h2></div><div class="radar"></div><p>Your strongest area is consistency and planning.</p></article>
+            <article class="glass-card"><div class="card-title"><h2>Key Takeaways</h2><span class="gold">✦</span></div><ul class="takeaways"><li>Your morning routine drives 90% of success.</li><li>You are more consistent on days you sleep 7+ hours.</li><li>Weekend planning will unlock the next level.</li></ul></article>
+        </section>
+    `;
+}
 
-    toast(message, tone = "info") {
-        const node = document.createElement("div");
-        node.className = `toast ${tone}`;
-        node.textContent = message;
-        this.els.toastStack.appendChild(node);
-        setTimeout(() => node.remove(), 3600);
+function scoreCard(title, score, note) {
+    return `<article class="glass-card score-card"><span class="mini-orb"></span><h2>${title}</h2><strong>${score}<small>/100</small></strong><p>${note}</p>${lineChart(monthlyStats().slice(-10), "violet")}</article>`;
+}
+
+function topHabits(title, best) {
+    const habits = [...state.habits].sort((a, b) => best ? habitProgress(b.id) - habitProgress(a.id) : habitProgress(a.id) - habitProgress(b.id)).slice(0, 5);
+    return `<div class="card-title"><h2>${title}</h2></div>${habits.map((habit, index) => `<div class="rank-row"><span>${index + 1}</span><strong>${habit.title}</strong><div class="rank-bar"><i style="width:${habitProgress(habit.id)}%"></i></div><em>${habitProgress(habit.id)}%</em></div>`).join("")}`;
+}
+
+function donut(title, pct) {
+    return `<div class="card-title"><h2>${title}</h2></div>${progressRing(pct, "medium", "Avg Focus")}<div class="legend-list"><span>Deep Work 45%</span><span>Study 27%</span><span>Planning 15%</span><span>Other 13%</span></div>`;
+}
+
+function renderCoach() {
+    return `
+        <section class="coach-layout">
+            <article class="glass-card coach-hero">
+                <div>
+                    <span class="soft-pill">AI Coach Beta</span>
+                    <h2>Hi June, I'm Lumi, your AI Coach</h2>
+                    <p>I analyze your habit patterns and progress to help you build a better system every day.</p>
+                    <button class="btn primary">Ask Lumi Anything</button>
+                </div>
+                <div class="coach-orb giant">⌣</div>
+            </article>
+            <article class="glass-card">
+                <div class="card-title"><h2>Smart Recommendations</h2><span>See all</span></div>
+                ${aiInsights.map((item, index) => `<div class="recommendation"><span class="${iconClass(["spark", "moon", "bolt", "drop"][index])}"></span><div><strong>${item.split(".")[0]}</strong><p>${item}</p></div><em>${index < 2 ? "High Impact" : "Medium Impact"}</em></div>`).join("")}
+            </article>
+            <article class="glass-card chat-card">
+                <div class="card-title"><h2>Chat with Lumi</h2><button class="ghost-dots">...</button></div>
+                <div class="chat-window" id="chatWindow">
+                    <div class="chat-bubble coach">Great progress this week. Your habits show strong morning consistency.</div>
+                    <div class="chat-bubble user">I want to improve my focus and stop procrastinating.</div>
+                    <div class="chat-bubble coach">Let's build a focused plan. Start with one protected block before noon.</div>
+                </div>
+                <form class="chat-form" id="chatForm"><input placeholder="Ask Lumi anything..."><button class="btn primary">Send</button></form>
+            </article>
+            <article class="glass-card">${scoreTiles()}</article>
+            <article class="glass-card"><div class="card-title"><h2>Habit Weakness Analysis</h2></div>${progressRing(32, "small", "Weak Area")}<p>Consistency often dips after lunch. Move one easy habit into that window.</p></article>
+            <article class="glass-card"><div class="card-title"><h2>Best Habit Timing</h2></div><div class="timing-grid">${Array.from({ length: 35 }, (_, i) => `<span class="t${i % 5}"></span>`).join("")}</div></article>
+            <article class="glass-card"><div class="card-title"><h2>Weekly Reflection</h2></div>${progressRing(86, "small", "Great Week")}</article>
+            <article class="glass-card wide action-plan"><div class="card-title"><h2>Personalized Action Plan</h2></div><ol><li>Build a consistent morning routine</li><li>Focus 90-min deep work sessions</li><li>Improve sleep schedule</li><li>Drink 2L of water daily</li></ol></article>
+            <article class="glass-card chart-wide"><div class="card-title"><h2>Mood & Energy Analysis</h2></div>${lineChart(monthlyStats().slice(-7), "rose")}</article>
+            <article class="glass-card"><div class="card-title"><h2>Quick Boost</h2></div>${["5-min Meditation", "Breathing Exercise", "Gratitude Journal"].map((item) => `<div class="streak-row"><span class="${iconClass("spark")}"></span><strong>${item}</strong><em>Start</em></div>`).join("")}</article>
+        </section>
+    `;
+}
+
+function scoreTiles() {
+    return `<div class="coach-score-grid">${[["Focus", 72], ["Wellness", 68], ["Study", 85], ["Sleep", 64]].map(([label, value]) => `<div><strong>${value}%</strong><span>${label}</span>${lineChart(monthlyStats().slice(-8), "violet")}</div>`).join("")}</div>`;
+}
+
+function renderJournal() {
+    const entry = state.journal[todayKey()] || {};
+    const past = Object.entries(state.journal).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 6);
+    return `
+        <section class="journal-layout">
+            <article class="glass-card journal-editor">
+                <div class="card-title"><h2>Daily Reflection</h2><span>${todayKey()}</span></div>
+                <label>Mood<select id="journalMood"><option ${entry.mood === "Calm" ? "selected" : ""}>Calm</option><option ${entry.mood === "Happy" ? "selected" : ""}>Happy</option><option ${entry.mood === "Tired" ? "selected" : ""}>Tired</option><option ${entry.mood === "Stressed" ? "selected" : ""}>Stressed</option></select></label>
+                <label>Energy<select id="journalEnergy"><option ${entry.energy === "High" ? "selected" : ""}>High</option><option ${entry.energy === "Medium" ? "selected" : ""}>Medium</option><option ${entry.energy === "Low" ? "selected" : ""}>Low</option></select></label>
+                <label>Gratitude notes<textarea id="journalGratitude">${escapeHtml(entry.gratitude || "")}</textarea></label>
+                <label>What went well?<textarea id="journalWell">${escapeHtml(entry.well || "")}</textarea></label>
+                <label>What can improve?<textarea id="journalImprove">${escapeHtml(entry.improve || "")}</textarea></label>
+                <button class="btn primary" id="saveJournal">Save Reflection</button>
+            </article>
+            <aside class="right-stack">
+                <article class="glass-card"><div class="card-title"><h2>Weekly Reflection Summary</h2></div>${progressRing(84, "small", "Reflection")}<p>You are most focused when you write your plan before starting work.</p></article>
+                <article class="glass-card"><div class="card-title"><h2>Past Entries</h2></div>${past.length ? past.map(([date, item]) => `<div class="journal-entry"><strong>${date}</strong><p>${escapeHtml(item.gratitude || item.well || "Saved reflection")}</p></div>`).join("") : "<p class='muted'>No saved entries yet.</p>"}</article>
+            </aside>
+        </section>
+    `;
+}
+
+function renderRewards() {
+    const xp = state.habits.reduce((sum, habit) => sum + habitProgress(habit.id) * 7, 0);
+    const level = Math.floor(xp / 1000) + 1;
+    return `
+        <section class="reward-page">
+            <article class="glass-card level-card">
+                <div><span class="kicker">Level ${level}</span><h2>Lumina Prodigy</h2><p>${xp} XP earned through completed habits.</p></div>
+                <div class="xp-bar"><span style="width:${xp % 1000 / 10}%"></span></div>
+            </article>
+            <div class="reward-grid">
+                ${state.rewards.map((reward) => `
+                    <article class="glass-card reward-card ${reward.unlocked ? "unlocked" : "locked"}">
+                        <div class="reward-medal">◇</div>
+                        <strong>${escapeHtml(reward.title)}</strong>
+                        <p>${escapeHtml(reward.desc)}</p>
+                        <span class="soft-pill">${reward.unlocked ? "Unlocked" : "Locked"}</span>
+                    </article>
+                `).join("")}
+            </div>
+            <article class="glass-card"><div class="card-title"><h2>Monthly Trophies</h2><span class="gold">✦</span></div><div class="trophy-row">${["January", "March", "June"].map((m) => `<div><span>◇</span><strong>${m}</strong><em>Consistency Trophy</em></div>`).join("")}</div></article>
+        </section>
+    `;
+}
+
+function renderSettings() {
+    return `
+        <section class="settings-grid">
+            <article class="glass-card"><div class="card-title"><h2>Profile Settings</h2></div><label>Name<input class="soft-input" value="June"></label><label>Email<input class="soft-input" value="june@example.com"></label><button class="btn primary">Save Profile</button></article>
+            <article class="glass-card"><div class="card-title"><h2>Theme Selection</h2></div><button class="btn soft" data-theme="light">Light Luxury</button><button class="btn soft" data-theme="dark">Dark Luxury</button></article>
+            <article class="glass-card"><div class="card-title"><h2>Reminder Preferences</h2></div>${toggleRow("Daily reminders", "reminders")}${toggleRow("Weekly review", "weeklyReview")}${toggleRow("Soft animations", "softAnimations")}</article>
+            <article class="glass-card"><div class="card-title"><h2>Dashboard Layout</h2></div>${toggleRow("Compact calendar", "compactCalendar")}</article>
+            <article class="glass-card"><div class="card-title"><h2>Habit Categories</h2></div><div class="linked-habits">${state.categories.map((cat) => `<span>${escapeHtml(cat)}</span>`).join("")}</div><input class="soft-input" id="newCategory" placeholder="Add category"><button class="btn primary" id="addCategory">Add Category</button></article>
+            <article class="glass-card"><div class="card-title"><h2>Data</h2></div><button class="btn soft" id="exportData">Export data</button><button class="btn danger" id="resetData">Reset localStorage</button></article>
+        </section>
+    `;
+}
+
+function toggleRow(label, key) {
+    return `<label class="toggle-row"><span>${label}</span><label class="switch"><input data-setting="${key}" type="checkbox" ${state.settings[key] ? "checked" : ""}><span></span></label></label>`;
+}
+
+function bindPageEvents() {
+    document.querySelectorAll("[data-page]").forEach((button) => {
+        button.addEventListener("click", () => {
+            state.page = button.dataset.page;
+            saveState();
+            render();
+        });
+    });
+    document.querySelectorAll("[data-page-jump]").forEach((button) => {
+        button.addEventListener("click", () => {
+            state.page = button.dataset.pageJump;
+            saveState();
+            render();
+        });
+    });
+    document.querySelectorAll("[data-complete]").forEach((input) => {
+        input.addEventListener("change", () => {
+            const date = input.dataset.dateComplete || todayKey();
+            state.completions[date] = state.completions[date] || {};
+            state.completions[date][input.dataset.complete] = input.checked !== false;
+            saveState();
+            sparkle();
+            render();
+        });
+    });
+    document.querySelectorAll("[data-select-date]").forEach((button) => {
+        button.addEventListener("click", () => {
+            state.selectedDate = button.dataset.selectDate;
+            saveState();
+            render();
+        });
+    });
+    document.querySelectorAll("[data-category]").forEach((button) => {
+        button.addEventListener("click", () => {
+            sessionStorage.setItem("lumina_category", button.dataset.category);
+            render();
+        });
+    });
+    document.querySelectorAll("[data-goal-filter]").forEach((button) => {
+        button.addEventListener("click", () => {
+            sessionStorage.setItem("lumina_goal_filter", button.dataset.goalFilter);
+            render();
+        });
+    });
+    document.querySelectorAll("[data-open-habit-modal]").forEach((button) => button.addEventListener("click", () => openHabitModal()));
+    document.querySelectorAll("[data-edit-habit]").forEach((button) => button.addEventListener("click", () => openHabitModal(button.dataset.editHabit)));
+    document.querySelectorAll("[data-delete-habit]").forEach((button) => button.addEventListener("click", () => deleteHabit(button.dataset.deleteHabit)));
+    document.querySelectorAll("[data-open-goal-modal]").forEach((button) => button.addEventListener("click", () => openGoalModal()));
+    document.querySelectorAll("[data-theme]").forEach((button) => button.addEventListener("click", () => setTheme(button.dataset.theme)));
+    document.querySelectorAll("[data-setting]").forEach((input) => input.addEventListener("change", () => {
+        state.settings[input.dataset.setting] = input.checked;
+        saveState();
+    }));
+
+    const journalButton = document.getElementById("saveJournal");
+    if (journalButton) journalButton.addEventListener("click", saveJournal);
+    const addCategory = document.getElementById("addCategory");
+    if (addCategory) addCategory.addEventListener("click", addCategoryHandler);
+    const exportData = document.getElementById("exportData");
+    if (exportData) exportData.addEventListener("click", exportDataHandler);
+    const resetData = document.getElementById("resetData");
+    if (resetData) resetData.addEventListener("click", resetDataHandler);
+    const chatForm = document.getElementById("chatForm");
+    if (chatForm) chatForm.addEventListener("submit", chatSubmit);
+}
+
+function openHabitModal(id = "") {
+    const habit = state.habits.find((item) => item.id === id) || {};
+    openModal(`
+        <form class="modal-card" id="habitForm">
+            <div class="card-title"><h2>${id ? "Edit Habit" : "Add New Habit"}</h2><button type="button" data-close-modal>×</button></div>
+            <label>Title<input name="title" value="${escapeHtml(habit.title || "")}" required></label>
+            <label>Description<input name="description" value="${escapeHtml(habit.description || "")}"></label>
+            <label>Category<select name="category">${state.categories.map((cat) => `<option ${habit.category === cat ? "selected" : ""}>${escapeHtml(cat)}</option>`).join("")}</select></label>
+            <label>Reminder<input name="reminder" value="${escapeHtml(habit.reminder || "08:00 AM")}"></label>
+            <label>Frequency<input name="frequency" value="${escapeHtml(habit.frequency || "Daily")}"></label>
+            <button class="btn primary">Save Habit</button>
+        </form>
+    `);
+    document.getElementById("habitForm").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const form = new FormData(event.currentTarget);
+        const payload = {
+            id: id || uid(),
+            icon: habit.icon || "spark",
+            title: form.get("title").trim(),
+            description: form.get("description").trim(),
+            category: form.get("category"),
+            reminder: form.get("reminder").trim(),
+            frequency: form.get("frequency").trim(),
+            target: habit.target || 30,
+            streak: habit.streak || 0
+        };
+        if (id) state.habits = state.habits.map((item) => item.id === id ? payload : item);
+        else state.habits.unshift(payload);
+        saveState();
+        closeModal();
+        toast("Habit saved.");
+        render();
+    });
+}
+
+function openGoalModal() {
+    openModal(`
+        <form class="modal-card" id="goalForm">
+            <div class="card-title"><h2>Add Goal</h2><button type="button" data-close-modal>×</button></div>
+            <label>Title<input name="title" required></label>
+            <label>Category<select name="category"><option>Wellness</option><option>Productivity</option><option>Growth</option></select></label>
+            <label>Deadline<input name="deadline" type="date"></label>
+            <label>Milestones<textarea name="milestones" placeholder="One milestone per line"></textarea></label>
+            <button class="btn primary">Save Goal</button>
+        </form>
+    `);
+    document.getElementById("goalForm").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const form = new FormData(event.currentTarget);
+        state.goals.unshift({
+            id: uid(),
+            title: form.get("title").trim(),
+            category: form.get("category"),
+            deadline: form.get("deadline") || todayKey(),
+            progress: 0,
+            habits: [],
+            milestones: String(form.get("milestones") || "").split(/\r?\n/).filter(Boolean)
+        });
+        saveState();
+        closeModal();
+        render();
+    });
+}
+
+function openModal(html) {
+    els.modal.innerHTML = `<div class="modal-backdrop">${html}</div>`;
+    els.modal.querySelectorAll("[data-close-modal]").forEach((button) => button.addEventListener("click", closeModal));
+}
+
+function closeModal() {
+    els.modal.innerHTML = "";
+}
+
+function deleteHabit(id) {
+    state.habits = state.habits.filter((habit) => habit.id !== id);
+    Object.values(state.completions).forEach((map) => delete map[id]);
+    saveState();
+    render();
+}
+
+function saveJournal() {
+    state.journal[todayKey()] = {
+        mood: document.getElementById("journalMood").value,
+        energy: document.getElementById("journalEnergy").value,
+        gratitude: document.getElementById("journalGratitude").value,
+        well: document.getElementById("journalWell").value,
+        improve: document.getElementById("journalImprove").value,
+        savedAt: new Date().toISOString()
+    };
+    saveState();
+    toast("Journal saved.");
+    render();
+}
+
+function addCategoryHandler() {
+    const input = document.getElementById("newCategory");
+    const value = input.value.trim();
+    if (value && !state.categories.includes(value)) {
+        state.categories.push(value);
+        saveState();
+        render();
     }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-    window.dayForge = new DayForgeApp();
-});
+function exportDataHandler() {
+    navigator.clipboard?.writeText(JSON.stringify(state, null, 2));
+    toast("Data copied as JSON.");
+}
+
+function resetDataHandler() {
+    localStorage.removeItem(STORAGE_KEY);
+    state = defaultState();
+    saveState();
+    render();
+}
+
+function chatSubmit(event) {
+    event.preventDefault();
+    const input = event.currentTarget.querySelector("input");
+    const text = input.value.trim();
+    if (!text) return;
+    const chat = document.getElementById("chatWindow");
+    chat.insertAdjacentHTML("beforeend", `<div class="chat-bubble user">${escapeHtml(text)}</div><div class="chat-bubble coach typing">Lumi is typing...</div>`);
+    input.value = "";
+    setTimeout(() => {
+        chat.querySelector(".typing")?.remove();
+        chat.insertAdjacentHTML("beforeend", `<div class="chat-bubble coach">Try a 25 minute focus block, then mark one small habit complete. Momentum likes evidence.</div>`);
+        chat.scrollTop = chat.scrollHeight;
+    }, 900);
+}
+
+function setTheme(theme) {
+    state.theme = theme;
+    saveState();
+    render();
+}
+
+function toast(message) {
+    const item = document.createElement("div");
+    item.className = "toast";
+    item.textContent = message;
+    els.toast.appendChild(item);
+    setTimeout(() => item.remove(), 3000);
+}
+
+function sparkle() {
+    els.confetti.innerHTML = Array.from({ length: 16 }, (_, i) => `<span style="--x:${Math.random() * 100}vw;--d:${Math.random() * 0.7}s;--r:${Math.random() * 360}deg"></span>`).join("");
+    setTimeout(() => { els.confetti.innerHTML = ""; }, 1400);
+}
+
+els.themeToggle.addEventListener("click", () => setTheme(state.theme === "dark" ? "light" : "dark"));
+
+setTimeout(() => {
+    els.loading.classList.add("hidden");
+    els.shell.classList.add("ready");
+}, 900);
+
+render();
