@@ -11,30 +11,25 @@ import {
 
 const CONFIG = {
   apiBaseUrl: "",
-  firebase: {},
   appTimezone: "Asia/Kolkata",
+  firebase: {},
   ...(window.DAYFORGE_CONFIG || {}),
-  firebase: {
-    ...((window.DAYFORGE_CONFIG || {}).firebase || {})
-  }
+  firebase: { ...((window.DAYFORGE_CONFIG || {}).firebase || {}) }
 };
 
-const STORAGE_KEY = "dayforge_week_dashboard_v1";
-const XP_BY_PRIORITY = { low: 18, medium: 32, high: 55 };
-
-const HABITS = [
-  { id: "clean-room", title: "Room clean routine", short: "Room", category: "Life", target: 7, color: "blue" },
-  { id: "assignments", title: "Complete assignments", short: "Assignments", category: "Study", target: 7, color: "rose" },
-  { id: "digital-files", title: "Organize digital files", short: "Files", category: "Focus", target: 5, color: "mint" },
-  { id: "read", title: "Read 10 pages of a book", short: "Read", category: "Growth", target: 7, color: "gold" },
-  { id: "exercise", title: "Exercise for 30 minutes", short: "Exercise", category: "Health", target: 5, color: "rose" },
-  { id: "water", title: "Drink 8 glasses of water", short: "Water", category: "Health", target: 7, color: "blue" },
-  { id: "plan", title: "Plan next day's schedule", short: "Plan", category: "Focus", target: 6, color: "mint" },
-  { id: "meditate", title: "Meditate for 10 minutes", short: "Meditate", category: "Mind", target: 7, color: "gold" },
-  { id: "emails", title: "Check emails and updates", short: "Email", category: "Work", target: 5, color: "blue" },
-  { id: "language", title: "Practice language skills", short: "Language", category: "Growth", target: 5, color: "rose" },
-  { id: "flashcards", title: "Review flashcards", short: "Cards", category: "Study", target: 7, color: "mint" },
-  { id: "journal", title: "Write in a journal", short: "Journal", category: "Mind", target: 5, color: "gold" }
+const DEFAULT_HABITS = [
+  { id: "clean-room", title: "Room clean routine", category: "Life", targetPerWeek: 7, active: true },
+  { id: "assignments", title: "Complete assignments", category: "Study", targetPerWeek: 7, active: true },
+  { id: "digital-files", title: "Organize digital files", category: "Focus", targetPerWeek: 5, active: true },
+  { id: "read", title: "Read 10 pages of a book", category: "Growth", targetPerWeek: 7, active: true },
+  { id: "exercise", title: "Exercise for 30 minutes", category: "Health", targetPerWeek: 5, active: true },
+  { id: "water", title: "Drink 8 glasses of water", category: "Health", targetPerWeek: 7, active: true },
+  { id: "plan", title: "Plan next day's schedule", category: "Focus", targetPerWeek: 6, active: true },
+  { id: "meditate", title: "Meditate for 10 minutes", category: "Mind", targetPerWeek: 7, active: true },
+  { id: "emails", title: "Check emails and updates", category: "Work", targetPerWeek: 5, active: true },
+  { id: "language", title: "Practice language skills", category: "Growth", targetPerWeek: 5, active: true },
+  { id: "flashcards", title: "Review flashcards", category: "Study", targetPerWeek: 7, active: true },
+  { id: "journal", title: "Write in a journal", category: "Mind", targetPerWeek: 5, active: true }
 ];
 
 const QUOTES = [
@@ -42,41 +37,55 @@ const QUOTES = [
   "Small wins today become visible confidence tomorrow.",
   "Keep the promise small enough to do and serious enough to matter.",
   "Progress loves clarity. Check the box, then move again.",
-  "A clean week is built one honest mark at a time."
+  "A warrior is built by repeated promises kept quietly."
+];
+
+const WARRIOR_IMAGES = [
+  "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=520&q=80",
+  "https://images.unsplash.com/photo-1549476464-37392f717541?auto=format&fit=crop&w=520&q=80",
+  "https://images.unsplash.com/photo-1574680096145-d05b474e2155?auto=format&fit=crop&w=520&q=80"
 ];
 
 function toDateKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function addDays(date, amount) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + amount);
-  return next;
+function parseDateKey(dateKey) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(year, month - 1, day);
 }
 
-function weekStart(date = new Date()) {
-  const start = new Date(date);
-  const day = start.getDay() || 7;
-  start.setDate(start.getDate() - day + 1);
-  start.setHours(0, 0, 0, 0);
-  return start;
+function monthKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function readStorage() {
+function monthDays(date) {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const total = new Date(year, month + 1, 0).getDate();
+  return Array.from({ length: total }, (_, index) => new Date(year, month, index + 1));
+}
+
+function uid() {
+  return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function readLocal(userId, key) {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+    return JSON.parse(localStorage.getItem(`dayforge_${userId}_${key}`)) || {};
   } catch {
     return {};
   }
 }
 
+function writeLocal(userId, key, value) {
+  localStorage.setItem(`dayforge_${userId}_${key}`, JSON.stringify(value));
+}
+
 function apiBase() {
   const configured = String(CONFIG.apiBaseUrl || "").trim().replace(/\/$/, "");
   if (configured) return configured;
-  if (location.hostname === "127.0.0.1" || location.hostname === "localhost") {
-    return "http://127.0.0.1:8000";
-  }
+  if (location.hostname === "127.0.0.1" || location.hostname === "localhost") return "http://127.0.0.1:8000";
   return location.origin;
 }
 
@@ -85,115 +94,174 @@ function hasFirebaseConfig() {
   return Boolean(fb.apiKey && fb.authDomain && fb.projectId && fb.appId);
 }
 
-function defaultWeekData(days) {
-  const saved = readStorage();
-  const data = {};
-  days.forEach((date, dayIndex) => {
-    const key = toDateKey(date);
-    data[key] = saved[key] || {};
-    HABITS.forEach((habit, habitIndex) => {
-      if (typeof data[key][habit.id] === "boolean") return;
-      data[key][habit.id] = dayIndex < 3 ? (habitIndex + dayIndex) % 5 !== 3 : false;
-    });
-  });
-  return data;
+function normalizeHabit(habit) {
+  return {
+    id: String(habit.id || uid()),
+    title: String(habit.title || "New habit").slice(0, 90),
+    category: String(habit.category || "Focus").slice(0, 40),
+    targetPerWeek: Math.max(1, Math.min(7, Number(habit.targetPerWeek || habit.target || 5))),
+    active: habit.active !== false,
+    createdAt: habit.createdAt || new Date().toISOString()
+  };
 }
 
 function App() {
-  const [selectedDate, setSelectedDate] = useState(toDateKey(new Date()));
-  const [weekOffset, setWeekOffset] = useState(0);
-  const weekDays = useMemo(() => {
-    const start = addDays(weekStart(new Date()), weekOffset * 7);
-    return Array.from({ length: 7 }, (_, index) => addDays(start, index));
-  }, [weekOffset]);
-  const [grid, setGrid] = useState(() => defaultWeekData(weekDays));
-  const [user, setUser] = useState(null);
   const [auth, setAuth] = useState(null);
-  const [syncState, setSyncState] = useState("Local save ready");
+  const [user, setUser] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [monthDate, setMonthDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(toDateKey(new Date()));
+  const [habits, setHabits] = useState(DEFAULT_HABITS);
+  const [grid, setGrid] = useState({});
+  const [theme, setTheme] = useState(localStorage.getItem("dayforge_theme") || "light");
+  const [syncState, setSyncState] = useState("Waiting for sign in");
+  const [habitDraft, setHabitDraft] = useState("");
+  const [welcomeState, setWelcomeState] = useState("");
+
+  const days = useMemo(() => monthDays(monthDate), [monthDate]);
+  const monthId = monthKey(monthDate);
+  const quote = QUOTES[Math.floor(Date.now() / 86400000) % QUOTES.length];
+  const image = WARRIOR_IMAGES[Math.floor(Date.now() / 86400000) % WARRIOR_IMAGES.length];
+  const activeHabits = habits.filter((habit) => habit.active);
 
   useEffect(() => {
-    if (!hasFirebaseConfig()) return;
-    const app = initializeApp(CONFIG.firebase);
-    const authInstance = getAuth(app);
-    setAuth(authInstance);
-    return onAuthStateChanged(authInstance, (nextUser) => {
+    if (!hasFirebaseConfig()) {
+      setAuthReady(true);
+      setSyncState("Firebase web config missing");
+      return;
+    }
+    const firebaseApp = initializeApp(CONFIG.firebase);
+    const nextAuth = getAuth(firebaseApp);
+    setAuth(nextAuth);
+    return onAuthStateChanged(nextAuth, (nextUser) => {
       setUser(nextUser);
-      setSyncState(nextUser ? "Firebase connected" : "Sign in for cloud sync");
+      setAuthReady(true);
+      setSyncState(nextUser ? "Signed in" : "Sign in required");
     });
   }, []);
 
   useEffect(() => {
-    setGrid((current) => ({ ...defaultWeekData(weekDays), ...current }));
-  }, [weekDays]);
+    document.body.dataset.theme = theme;
+    localStorage.setItem("dayforge_theme", theme);
+  }, [theme]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(grid));
-  }, [grid]);
-
-  useEffect(() => {
+    if (!user) return;
+    const cached = readLocal(user.uid, monthId);
+    setGrid(cached);
     syncFromBackend();
+    sendWelcomeEmail();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, weekOffset]);
+  }, [user, monthId]);
 
-  const selectedMap = grid[selectedDate] || {};
-  const weekStats = useMemo(() => buildWeekStats(grid, weekDays), [grid, weekDays]);
-  const selectedStats = dayStats(selectedMap);
-  const quote = QUOTES[Math.floor(Date.now() / 86400000) % QUOTES.length];
+  useEffect(() => {
+    if (!user) return;
+    writeLocal(user.uid, monthId, grid);
+  }, [grid, monthId, user]);
 
-  async function headers() {
-    const baseHeaders = { "Content-Type": "application/json", "X-Demo-User": user?.uid || "dayforge-local" };
-    if (auth?.currentUser) {
-      baseHeaders.Authorization = `Bearer ${await auth.currentUser.getIdToken()}`;
-    }
-    return baseHeaders;
+  async function authHeaders() {
+    const headers = { "Content-Type": "application/json", "X-Demo-User": user?.uid || "dayforge-local" };
+    if (auth?.currentUser) headers.Authorization = `Bearer ${await auth.currentUser.getIdToken()}`;
+    return headers;
   }
 
   async function syncFromBackend() {
+    if (!user) return;
     try {
-      setSyncState(user ? "Syncing cloud..." : "Local plus dev sync");
-      const response = await fetch(`${apiBase()}/api/snapshot?year=${new Date().getFullYear()}`, {
-        headers: await headers()
+      setSyncState("Syncing month...");
+      const response = await fetch(`${apiBase()}/api/snapshot?year=${monthDate.getFullYear()}`, {
+        headers: await authHeaders()
       });
       if (!response.ok) throw new Error("snapshot failed");
       const payload = await response.json();
-      const incoming = {};
-      weekDays.forEach((date) => {
+      const workspaceHabits = (payload.workspace?.habits || []).map(normalizeHabit).filter((habit) => habit.active);
+      setHabits(workspaceHabits.length ? workspaceHabits : DEFAULT_HABITS);
+      const nextGrid = {};
+      days.forEach((date) => {
         const key = toDateKey(date);
-        incoming[key] = payload.days?.[key]?.habitChecks || {};
+        nextGrid[key] = payload.days?.[key]?.habitChecks || {};
       });
-      setGrid((current) => mergeWeek(current, incoming));
+      setGrid((current) => ({ ...nextGrid, ...current }));
       setSyncState(`Synced to ${payload.primaryStore || "backend"}`);
     } catch {
-      setSyncState("Saved locally");
+      setSyncState("Backend offline, using local cache");
     }
   }
 
-  async function pushDay(dateKey, nextMap) {
+  async function saveWorkspace(nextHabits) {
+    if (!user) return;
     try {
-      const done = Object.values(nextMap).filter(Boolean).length;
-      const status = done === HABITS.length ? "won" : done > 0 ? "neutral" : "missed";
-      const tasks = HABITS.map((habit) => ({
-        id: habit.id,
-        title: habit.title,
-        text: habit.title,
-        done: Boolean(nextMap[habit.id]),
-        priority: "medium",
-        estimateMins: 20
-      }));
-      const response = await fetch(`${apiBase()}/api/days/${dateKey}`, {
+      await fetch(`${apiBase()}/api/workspace`, {
         method: "PUT",
-        headers: await headers(),
+        headers: await authHeaders(),
+        body: JSON.stringify({
+          workspace: {
+            profile: {
+              displayName: user.displayName || user.email || "Day Forge Warrior",
+              mission: "Win the month one checked habit at a time."
+            },
+            habits: nextHabits,
+            notificationSettings: {
+              enabled: true,
+              email: user.email || "",
+              timezone: CONFIG.appTimezone || "Asia/Kolkata"
+            }
+          }
+        })
+      });
+      setSyncState("Habits saved");
+    } catch {
+      setSyncState("Habits saved locally");
+    }
+  }
+
+  async function sendWelcomeEmail() {
+    if (!user) return;
+    const key = `dayforge_welcome_${user.uid}`;
+    if (localStorage.getItem(key)) return;
+    try {
+      setWelcomeState("Sending welcome email...");
+      const response = await fetch(`${apiBase()}/api/notifications/welcome`, {
+        method: "POST",
+        headers: await authHeaders(),
+        body: JSON.stringify({
+          email: user.email,
+          displayName: user.displayName || "Warrior"
+        })
+      });
+      if (!response.ok) throw new Error("welcome failed");
+      localStorage.setItem(key, "sent");
+      setWelcomeState("Welcome email sent");
+    } catch {
+      setWelcomeState("Welcome email pending");
+    }
+  }
+
+  async function pushDay(dateKey, checks) {
+    if (!user) return;
+    try {
+      const done = activeHabits.filter((habit) => checks[habit.id]).length;
+      const status = done === activeHabits.length ? "won" : done > 0 ? "neutral" : "missed";
+      await fetch(`${apiBase()}/api/days/${dateKey}`, {
+        method: "PUT",
+        headers: await authHeaders(),
         body: JSON.stringify({
           day: {
             dateKey,
             status,
             focusLine: quote,
-            habitChecks: nextMap,
-            tasks
+            habitChecks: checks,
+            tasks: activeHabits.map((habit) => ({
+              id: habit.id,
+              title: habit.title,
+              text: habit.title,
+              done: Boolean(checks[habit.id]),
+              priority: "medium",
+              estimateMins: 20
+            }))
           }
         })
       });
-      if (!response.ok) throw new Error("save failed");
       setSyncState("Saved to backend");
     } catch {
       setSyncState("Saved locally");
@@ -202,81 +270,119 @@ function App() {
 
   function toggleHabit(dateKey, habitId) {
     setGrid((current) => {
-      const nextMap = { ...(current[dateKey] || {}), [habitId]: !current[dateKey]?.[habitId] };
-      const next = { ...current, [dateKey]: nextMap };
-      pushDay(dateKey, nextMap);
-      return next;
+      const nextChecks = { ...(current[dateKey] || {}), [habitId]: !current[dateKey]?.[habitId] };
+      pushDay(dateKey, nextChecks);
+      return { ...current, [dateKey]: nextChecks };
     });
   }
 
-  async function handleAuth() {
-    if (!auth) {
-      setSyncState("Firebase config missing");
-      return;
-    }
-    if (auth.currentUser) {
-      await signOut(auth);
-      return;
-    }
-    await signInWithPopup(auth, new GoogleAuthProvider());
+  function addHabit(event) {
+    event.preventDefault();
+    const title = habitDraft.trim();
+    if (!title) return;
+    const nextHabit = normalizeHabit({ id: uid(), title, category: "Focus", targetPerWeek: 5, active: true });
+    const nextHabits = [...activeHabits, nextHabit];
+    setHabits(nextHabits);
+    setHabitDraft("");
+    saveWorkspace(nextHabits);
   }
 
+  function deleteHabit(habitId) {
+    const nextHabits = habits.map((habit) => habit.id === habitId ? { ...habit, active: false } : habit);
+    setHabits(nextHabits);
+    saveWorkspace(nextHabits);
+  }
+
+  async function handleAuth() {
+    if (!auth) return;
+    if (auth.currentUser) await signOut(auth);
+    else await signInWithPopup(auth, new GoogleAuthProvider());
+  }
+
+  if (!authReady) return <div className="gate-screen"><div className="gate-card">Loading Day Forge...</div></div>;
+
+  if (!user) {
+    return (
+      <div className={`gate-screen ${theme}`}>
+        <section className="gate-card">
+          <div>
+            <span className="gate-kicker">Day Forge</span>
+            <h1>Sign in to enter your monthly habit command center.</h1>
+            <p>Your habits, monthly grid, welcome email, and progress sync only after Google sign-in.</p>
+            <button type="button" className="primary-button" onClick={handleAuth}>Sign in with Google</button>
+            <button type="button" className="theme-button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
+              {theme === "dark" ? "Light theme" : "Dark theme"}
+            </button>
+            <small>{syncState}</small>
+          </div>
+          <img src={image} alt="Warrior training for discipline" />
+        </section>
+      </div>
+    );
+  }
+
+  const monthStats = buildMonthStats(grid, days, activeHabits);
+  const selectedStats = dayStats(grid[selectedDate] || {}, activeHabits);
+  const weeklyStats = buildWeeklyStats(grid, days, activeHabits);
+
   return (
-    <main className="forge-screen">
+    <main className={`forge-screen ${theme}`}>
       <section className="left-panel">
         <div className="brand-block">
-          <h1>June</h1>
-          <span>Habit Tracker</span>
+          <h1>{monthDate.toLocaleDateString("en-US", { month: "long" })}</h1>
+          <span>Day Forge Tracker</span>
         </div>
 
         <div className="select-row">
-          <label>Month<select defaultValue="June"><option>June</option></select></label>
-          <label>Year<select defaultValue="2026"><option>2026</option></select></label>
+          <label>Month<select value={monthDate.getMonth()} onChange={(e) => setMonthDate(new Date(monthDate.getFullYear(), Number(e.target.value), 1))}>
+            {Array.from({ length: 12 }, (_, i) => <option key={i} value={i}>{new Date(2026, i, 1).toLocaleDateString("en-US", { month: "long" })}</option>)}
+          </select></label>
+          <label>Year<select value={monthDate.getFullYear()} onChange={(e) => setMonthDate(new Date(Number(e.target.value), monthDate.getMonth(), 1))}>
+            {[2025, 2026, 2027].map((year) => <option key={year}>{year}</option>)}
+          </select></label>
         </div>
 
         <figure className="focus-card">
-          <img src="https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=420&q=80" alt="Focused morning habit practice" />
+          <img src={image} alt="Warrior training for discipline" />
           <figcaption>I am...<br />{quote}</figcaption>
         </figure>
 
         <div className="habit-list-card">
           <h2>Daily Habits</h2>
           <ol>
-            {HABITS.map((habit) => <li key={habit.id}>{habit.title}</li>)}
+            {activeHabits.map((habit) => (
+              <li key={habit.id}>
+                <span>{habit.title}</span>
+                <button type="button" onClick={() => deleteHabit(habit.id)} aria-label={`Delete ${habit.title}`}>×</button>
+              </li>
+            ))}
           </ol>
         </div>
 
-        <button className="auth-button" type="button" onClick={handleAuth}>
-          {user ? "Sign out" : "Sign in with Google"}
-        </button>
-        <p className="sync-line">{syncState}</p>
+        <form className="add-habit" onSubmit={addHabit}>
+          <input value={habitDraft} onChange={(e) => setHabitDraft(e.target.value)} placeholder="Add a habit" maxLength={80} />
+          <button type="submit">Add</button>
+        </form>
+
+        <div className="account-row">
+          <button className="auth-button" type="button" onClick={handleAuth}>Sign out</button>
+          <button className="theme-button small" type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
+            {theme === "dark" ? "Light" : "Dark"}
+          </button>
+        </div>
+        <p className="sync-line">{syncState} · {welcomeState}</p>
       </section>
 
-      <section className="center-panel">
-        <AreaCurve stats={weekStats} />
-        <WeeklyBars stats={weekStats} />
-
-        <div className="ring-row">
-          {weekDays.map((date) => {
-            const key = toDateKey(date);
-            return (
-              <button
-                key={key}
-                className={`day-ring ${selectedDate === key ? "active" : ""}`}
-                type="button"
-                onClick={() => setSelectedDate(key)}
-              >
-                <Ring value={dayStats(grid[key] || {}).pct} size={84} />
-                <span>{date.toLocaleDateString("en-US", { weekday: "short" })}</span>
-              </button>
-            );
-          })}
-        </div>
-
+      <section className="center-panel" style={{ "--days": days.length, "--habits": Math.max(activeHabits.length, 1) }}>
+        <AreaCurve days={days} grid={grid} habits={activeHabits} />
+        <MonthlyBars days={days} grid={grid} habits={activeHabits} />
+        <WeeklyRings weeks={weeklyStats} />
         <HabitMatrix
+          days={days}
+          habits={activeHabits}
           grid={grid}
-          weekDays={weekDays}
           selectedDate={selectedDate}
+          onSelect={setSelectedDate}
           onToggle={toggleHabit}
         />
       </section>
@@ -284,40 +390,63 @@ function App() {
       <section className="right-panel">
         <div className="top-metrics">
           <MetricCard title="Daily Progress" value={`${selectedStats.pct}%`} />
-          <MetricCard title="Habits" value={`${weekStats.done} / ${weekStats.total}`} ring={Math.round((weekStats.done / weekStats.total) * 100)} />
+          <MetricCard title="Habits" value={`${monthStats.done} / ${monthStats.total}`} ring={monthStats.pct} />
         </div>
-        <TopHabits grid={grid} weekDays={weekDays} />
-        <DailyProgress grid={grid} weekDays={weekDays} />
+        <TopHabits grid={grid} days={days} habits={activeHabits} />
+        <DailyProgress grid={grid} days={days} habits={activeHabits} />
         <div className="quote-strip">Over 100% on habits, keep going.</div>
       </section>
     </main>
   );
 }
 
-function mergeWeek(current, incoming) {
-  const next = { ...current };
-  Object.entries(incoming).forEach(([dateKey, checks]) => {
-    next[dateKey] = { ...(next[dateKey] || {}), ...(checks || {}) };
-  });
-  return next;
+function dayStats(checks = {}, habits = []) {
+  const total = habits.length || 1;
+  const done = habits.filter((habit) => checks[habit.id]).length;
+  return { done, total, pct: Math.round((done / total) * 100) };
 }
 
-function dayStats(map = {}) {
-  const done = HABITS.filter((habit) => map[habit.id]).length;
-  return { done, total: HABITS.length, pct: Math.round((done / HABITS.length) * 100) };
-}
-
-function buildWeekStats(grid, weekDays) {
-  const daily = weekDays.map((date) => {
-    const key = toDateKey(date);
-    return { key, ...dayStats(grid[key] || {}) };
-  });
-  const done = daily.reduce((sum, day) => sum + day.done, 0);
-  const total = daily.reduce((sum, day) => sum + day.total, 0);
+function buildMonthStats(grid, days, habits) {
+  const daily = days.map((date) => dayStats(grid[toDateKey(date)] || {}, habits));
+  const done = daily.reduce((sum, item) => sum + item.done, 0);
+  const total = daily.reduce((sum, item) => sum + item.total, 0) || 1;
   return { daily, done, total, pct: Math.round((done / total) * 100) };
 }
 
-function Ring({ value, size = 98 }) {
+function buildWeeklyStats(grid, days, habits) {
+  const chunks = [];
+  for (let i = 0; i < days.length; i += 7) chunks.push(days.slice(i, i + 7));
+  return chunks.map((chunk, index) => {
+    const stats = buildMonthStats(grid, chunk, habits);
+    return { ...stats, label: `week ${index + 1}` };
+  });
+}
+
+function habitRows(grid, days, habits) {
+  return habits.map((habit) => {
+    const values = days.map((date) => Boolean(grid[toDateKey(date)]?.[habit.id]));
+    const done = values.filter(Boolean).length;
+    return {
+      ...habit,
+      done,
+      total: days.length,
+      pct: Math.round((done / days.length) * 100),
+      streak: longestRun(values)
+    };
+  }).sort((a, b) => b.pct - a.pct || a.title.localeCompare(b.title));
+}
+
+function longestRun(values) {
+  let best = 0;
+  let run = 0;
+  values.forEach((value) => {
+    run = value ? run + 1 : 0;
+    best = Math.max(best, run);
+  });
+  return best;
+}
+
+function Ring({ value, size = 96 }) {
   return (
     <svg className="ring" width={size} height={size} viewBox="0 0 100 100" style={{ "--value": value }}>
       <circle className="ring-bg" cx="50" cy="50" r="39" />
@@ -327,9 +456,10 @@ function Ring({ value, size = 98 }) {
   );
 }
 
-function AreaCurve({ stats }) {
-  const points = stats.daily.map((day, index) => {
-    const x = (index / (stats.daily.length - 1)) * 100;
+function AreaCurve({ days, grid, habits }) {
+  const stats = days.map((date) => dayStats(grid[toDateKey(date)] || {}, habits));
+  const points = stats.map((day, index) => {
+    const x = stats.length === 1 ? 0 : (index / (stats.length - 1)) * 100;
     const y = 86 - day.pct * 0.72;
     return `${x},${y}`;
   }).join(" ");
@@ -349,36 +479,59 @@ function AreaCurve({ stats }) {
   );
 }
 
-function WeeklyBars({ stats }) {
+function MonthlyBars({ days, grid, habits }) {
   return (
-    <div className="bar-card">
-      {stats.daily.map((day, index) => (
-        <div className="bar-col" key={day.key}>
-          <span className="week-label">week 1</span>
-          <i style={{ height: `${Math.max(day.pct, 4)}%` }} className={index > 2 ? "pink" : ""} />
-          <b>{day.pct}%</b>
-          <em>{index + 1}</em>
+    <div className="bar-card" style={{ "--days": days.length }}>
+      {days.map((date, index) => {
+        const key = toDateKey(date);
+        const pct = dayStats(grid[key] || {}, habits).pct;
+        return (
+          <button key={key} type="button" className="bar-col" onClick={() => {}}>
+            <span className="week-label">{index % 7 === 0 ? `week ${Math.floor(index / 7) + 1}` : ""}</span>
+            <i style={{ height: `${Math.max(pct, 2)}%` }} className={index >= 7 && index < 14 ? "pink" : ""} />
+            <b>{pct}%</b>
+            <em>{date.getDate()}</em>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function WeeklyRings({ weeks }) {
+  return (
+    <div className="ring-row">
+      {weeks.map((week) => (
+        <div className="week-ring" key={week.label}>
+          <Ring value={week.pct} size={88} />
+          <span>{week.label}</span>
         </div>
       ))}
     </div>
   );
 }
 
-function HabitMatrix({ grid, weekDays, selectedDate, onToggle }) {
+function HabitMatrix({ days, habits, grid, selectedDate, onSelect, onToggle }) {
   return (
-    <div className="matrix-card">
+    <div className="matrix-card" style={{ "--days": days.length, "--habits": Math.max(habits.length, 1) }}>
       <div className="matrix-header">
         <span></span>
-        {weekDays.map((date) => <b key={toDateKey(date)}>{date.toLocaleDateString("en-US", { weekday: "short" }).slice(0, 1)}</b>)}
+        {days.map((date) => {
+          const key = toDateKey(date);
+          return <button key={key} type="button" className={selectedDate === key ? "selected-day" : ""} onClick={() => onSelect(key)}>{date.toLocaleDateString("en-US", { weekday: "short" }).slice(0, 1)}</button>;
+        })}
       </div>
       <div className="matrix-days">
         <span></span>
-        {weekDays.map((date) => <b key={toDateKey(date)}>{date.getDate()}</b>)}
+        {days.map((date) => {
+          const key = toDateKey(date);
+          return <button key={key} type="button" className={selectedDate === key ? "selected-day" : ""} onClick={() => onSelect(key)}>{date.getDate()}</button>;
+        })}
       </div>
-      {HABITS.map((habit) => (
+      {habits.map((habit) => (
         <div className="matrix-row" key={habit.id}>
           <span>{habit.title}</span>
-          {weekDays.map((date) => {
+          {days.map((date) => {
             const key = toDateKey(date);
             const checked = Boolean(grid[key]?.[habit.id]);
             return (
@@ -407,37 +560,35 @@ function MetricCard({ title, value, ring }) {
   );
 }
 
-function TopHabits({ grid, weekDays }) {
-  const rows = habitRows(grid, weekDays).slice(0, 10);
+function TopHabits({ grid, days, habits }) {
+  const rows = habitRows(grid, days, habits).slice(0, 10);
   return (
     <article className="table-card top-habits">
       <h3>Top 10 Habits</h3>
       <table>
         <thead><tr><th>#</th><th>daily habit</th><th>progress</th></tr></thead>
         <tbody>
-          {rows.map((row, index) => (
-            <tr key={row.id}><td>{index + 1}</td><td>{row.title}</td><td>{row.pct}%</td></tr>
-          ))}
+          {rows.map((row, index) => <tr key={row.id}><td>{index + 1}</td><td>{row.title}</td><td>{row.pct}%</td></tr>)}
         </tbody>
       </table>
     </article>
   );
 }
 
-function DailyProgress({ grid, weekDays }) {
-  const rows = habitRows(grid, weekDays);
+function DailyProgress({ grid, days, habits }) {
+  const rows = habitRows(grid, days, habits);
   return (
     <article className="table-card progress-table">
       <h3>Daily Progress</h3>
-      <p>{rows.reduce((sum, row) => sum + row.done, 0)} / {rows.length * weekDays.length} completed</p>
+      <p>{rows.reduce((sum, row) => sum + row.done, 0)} / {rows.length * days.length} completed</p>
       <table>
         <thead><tr><th>goal</th><th>percentage</th><th>count</th><th>streak</th></tr></thead>
         <tbody>
           {rows.map((row) => (
             <tr key={row.id}>
-              <td>{row.target}</td>
+              <td>{row.targetPerWeek}</td>
               <td><span className="mini-bar"><i style={{ width: `${row.pct}%` }} /></span>{row.pct}%</td>
-              <td>{row.done} / {weekDays.length}</td>
+              <td>{row.done} / {days.length}</td>
               <td>{row.streak}</td>
             </tr>
           ))}
@@ -445,29 +596,6 @@ function DailyProgress({ grid, weekDays }) {
       </table>
     </article>
   );
-}
-
-function habitRows(grid, weekDays) {
-  return HABITS.map((habit) => {
-    const values = weekDays.map((date) => Boolean(grid[toDateKey(date)]?.[habit.id]));
-    const done = values.filter(Boolean).length;
-    return {
-      ...habit,
-      done,
-      pct: Math.round((done / weekDays.length) * 100),
-      streak: longestRun(values)
-    };
-  }).sort((a, b) => b.pct - a.pct);
-}
-
-function longestRun(values) {
-  let best = 0;
-  let run = 0;
-  values.forEach((value) => {
-    run = value ? run + 1 : 0;
-    best = Math.max(best, run);
-  });
-  return best;
 }
 
 createRoot(document.getElementById("root")).render(<App />);

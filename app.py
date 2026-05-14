@@ -487,6 +487,7 @@ def normalize_workspace(payload):
             "displayName": clean_text(profile.get("displayName"), 80),
             "mission": clean_text(profile.get("mission"), 180),
             "identity": clean_text(profile.get("identity"), 160) or "I am the kind of person who keeps promises to myself.",
+            "welcomeEmailSentAt": clean_text(profile.get("welcomeEmailSentAt"), 40),
         },
         "recovery": {
             "addictionName": clean_text(recovery.get("addictionName"), 60) or "porn",
@@ -768,6 +769,53 @@ async def send_test_notification(request: Request, user=Depends(require_user)):
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     return {"ok": True, "provider": "resend", "result": result}
+
+
+@app.post("/api/notifications/welcome")
+async def send_welcome_notification(request: Request, user=Depends(require_user)):
+    body = await request.json()
+    workspace, _ = storage.read_workspace(user["uid"])
+    profile = workspace.get("profile", {})
+    settings = workspace.get("notificationSettings", {})
+    to_email = clean_text(body.get("email") or settings.get("email") or user.get("email"), 180)
+    display_name = clean_text(body.get("displayName") or user.get("name") or profile.get("displayName") or "Warrior", 80)
+
+    if not to_email:
+        raise HTTPException(status_code=400, detail="No email address is available for the welcome email.")
+
+    if profile.get("welcomeEmailSentAt"):
+        return {"ok": True, "alreadySent": True, "sentAt": profile.get("welcomeEmailSentAt")}
+
+    try:
+        result = resend.send_email(
+            to_email,
+            "Welcome to Day Forge",
+            notification_html(
+                f"Welcome to Day Forge, {display_name}",
+                "Your monthly habit command center is ready. This is where small daily marks become visible momentum.",
+                [
+                    "Add the habits you want to track this month.",
+                    "Check off each day honestly; the dashboard will keep the score.",
+                    "Come back daily, protect the streak, and build the identity you want.",
+                ],
+            ),
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    profile["displayName"] = profile.get("displayName") or display_name
+    profile["welcomeEmailSentAt"] = utc_now().isoformat()
+    settings["email"] = settings.get("email") or to_email
+    settings["enabled"] = settings.get("enabled", True)
+    workspace["profile"] = profile
+    workspace["notificationSettings"] = settings
+
+    try:
+        storage.put_workspace(user["uid"], workspace)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    return {"ok": True, "provider": "resend", "result": result, "sentAt": profile["welcomeEmailSentAt"]}
 
 
 @app.post("/api/notifications/due")
