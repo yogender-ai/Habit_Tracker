@@ -1,13 +1,13 @@
-# DayForge
+# DayForge Momentum
 
-DayForge is a gamified habit and task tracker built from the old Momentum prototype. It uses a Vite/npm frontend, Firebase Authentication, a FastAPI backend, and Neon/Postgres storage with primary + fallback database support.
+DayForge is a recovery and focus dashboard for turning "remove addiction -> focus on goal -> build proof" into a daily game. It has tasks, goals, habit heatmaps, clean streaks, urge logging, recovery rescue plans, awards, calendar reminders, Firebase sign-in, cloud persistence, and Resend email notifications.
 
 ## Stack
 
-- Frontend: Vite, vanilla JS, npm Firebase SDK
-- Auth: Firebase Google sign-in
-- Backend: FastAPI + SQLAlchemy
-- Database: Neon Postgres primary, optional secondary fallback
+- Frontend: Vite, vanilla JavaScript, Firebase browser auth
+- Backend: FastAPI, SQLAlchemy, Postgres/SQLite
+- Database: Neon/Postgres primary with optional secondary fallback
+- Notifications: Resend email API
 - Deploy: Vercel frontend, Render backend
 
 ## Local Frontend
@@ -17,7 +17,7 @@ npm install
 npm run dev
 ```
 
-Firebase browser config lives in `public/config.js`. Set `apiBaseUrl` after your Render backend is deployed:
+Set `public/config.js` before using cloud sync from Vercel/local Vite:
 
 ```js
 window.DAYFORGE_CONFIG = {
@@ -32,6 +32,8 @@ window.DAYFORGE_CONFIG = {
 };
 ```
 
+The frontend always saves to `localStorage` first. If `apiBaseUrl` is empty, it works as a local-only app until the Render API is configured.
+
 ## Local Backend
 
 ```bash
@@ -41,34 +43,45 @@ uvicorn app:app --reload
 
 If no database env vars are set, the backend uses local SQLite for testing.
 
-## Render Env
+## Render Env Vars
 
-Set the Neon connection string you gave me as `DATABASE_URL_PRIMARY` in Render, not in committed code. Add `DATABASE_URL_SECONDARY` later when your second Neon database is ready.
+Save these in the Render web service environment:
 
 ```bash
 APP_TIMEZONE=Asia/Kolkata
-CORS_ORIGINS=https://your-vercel-app.vercel.app
+CORS_ORIGINS=https://your-vercel-app.vercel.app,http://localhost:5173
 DATABASE_URL_PRIMARY=postgresql://...
 DATABASE_URL_SECONDARY=postgresql://...
 FIREBASE_PROJECT_ID=news-intel-d1bd3
 FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
 ALLOW_DEV_AUTH=false
+
+RESEND_API_KEY=re_...
+RESEND_FROM_EMAIL=DayForge <noreply@your-verified-domain.com>
+RESEND_REPLY_TO=your-email@example.com
+NOTIFICATION_CRON_SECRET=use-a-long-random-secret
 ```
 
-The API writes to the primary database first. If the primary write fails, it tries the secondary. Reads merge both stores so failover data still appears.
+For Resend, `RESEND_FROM_EMAIL` must use a sender/domain verified in Resend. Keep `RESEND_API_KEY` secret.
 
-## Vercel
+## Scheduled Notifications
 
-Vercel is configured through `vercel.json`:
+Create a cron job from Render Cron, cron-job.org, GitHub Actions, or any scheduler that calls:
 
-- Install: `npm install`
-- Build: `npm run build`
-- Output: `dist`
+```bash
+POST https://your-render-service.onrender.com/api/notifications/due
+X-Cron-Secret: your-NOTIFICATION_CRON_SECRET
+```
+
+Run it every 10-15 minutes. The backend sends due calendar reminders, morning launch emails, evening reviews, and relapse-shield emails through Resend.
 
 ## API
 
 - `GET /health`
 - `GET /api/snapshot?year=2026`
 - `PUT /api/days/<YYYY-MM-DD>`
+- `PUT /api/workspace`
+- `POST /api/notifications/test`
+- `POST /api/notifications/due`
 
-When Firebase Admin is configured, `/api/*` requires a Firebase bearer token. Past days are locked server-side, and future days can be planned but not scored.
+When Firebase Admin is configured, `/api/*` requires a Firebase bearer token. In local development without Firebase Admin or database env vars, dev auth is allowed automatically.

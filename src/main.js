@@ -1,5 +1,4 @@
 import { initializeApp } from "firebase/app";
-import { getAnalytics, isSupported as analyticsIsSupported } from "firebase/analytics";
 import {
     getAuth,
     GoogleAuthProvider,
@@ -31,34 +30,65 @@ const CONFIG = {
     }
 };
 
-const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-const XP_BY_PRIORITY = { low: 20, medium: 35, high: 55 };
+const XP_BY_PRIORITY = { low: 18, medium: 32, high: 55 };
 const PRIORITY_LABELS = { low: "Small", medium: "Core", high: "Boss" };
+const LEVEL_SIZE = 650;
 
-const WIN_QUOTES = [
-    { text: "Trust the process.", author: "DayForge" },
-    { text: "The secret of getting ahead is getting started.", author: "Mark Twain" },
-    { text: "Small daily improvements are the key to staggering long-term results.", author: "Robin Sharma" },
-    { text: "We are what we repeatedly do. Excellence is not an act, but a habit.", author: "Aristotle" },
-    { text: "Don't count the days, make the days count.", author: "Muhammad Ali" },
-    { text: "Success is the sum of small efforts repeated day in and day out.", author: "Robert Collier" },
-    { text: "Discipline is choosing between what you want now and what you want most.", author: "Abraham Lincoln" },
-    { text: "The only way to do great work is to love what you do.", author: "Steve Jobs" },
-    { text: "You don't have to be extreme, just consistent.", author: "DayForge" },
-    { text: "A year from now you'll wish you started today.", author: "Karen Lamb" },
-    { text: "Winners are not people who never fail but people who never quit.", author: "Edwin Louis Cole" },
-    { text: "Progress, not perfection.", author: "DayForge" },
-    { text: "It does not matter how slowly you go as long as you do not stop.", author: "Confucius" },
-    { text: "Motivation gets you going. Habit keeps you growing.", author: "John C. Maxwell" },
-    { text: "Be stronger than your excuses.", author: "DayForge" },
-    { text: "Fall seven times, stand up eight.", author: "Japanese Proverb" },
-    { text: "Your future self will thank you.", author: "DayForge" },
-    { text: "One day or day one. You decide.", author: "Paulo Coelho" },
-    { text: "The hard days are what make you stronger.", author: "Aly Raisman" },
-    { text: "Consistency beats intensity.", author: "DayForge" },
+const QUOTES = [
+    ["One clean decision can restart the whole day.", "DayForge"],
+    ["You do not need a perfect mood. You need the next honest action.", "DayForge"],
+    ["Discipline is remembering what you want most when the shortcut appears.", "DayForge"],
+    ["The urge is a wave. Your plan is the shore.", "DayForge"],
+    ["Build proof quietly. The confidence arrives after the reps.", "DayForge"],
+    ["Win the next ten minutes, then ask again.", "DayForge"],
+    ["Shame hides the problem. Truth gives you handles.", "DayForge"],
+    ["A streak is not magic. It is a trail of protected moments.", "DayForge"],
+    ["Make the good choice easier to see than the bad choice.", "DayForge"],
+    ["Your future self is watching the small promises.", "DayForge"]
 ];
 
-const QUOTE_ICONS = ['💎', '🔥', '⚡', '🏆', '🎯', '💪', '🌟', '🚀', '✨', '👑'];
+const DEFAULT_GOALS = [
+    {
+        id: "goal-clean-mind",
+        title: "Remove addiction",
+        why: "Protect attention, confidence, and self-respect.",
+        targetDate: "",
+        status: "active",
+        skill: "Recovery",
+        color: "mint",
+        createdAt: new Date().toISOString()
+    },
+    {
+        id: "goal-focus-career",
+        title: "Focus on the main goal",
+        why: "Turn daily discipline into visible career progress.",
+        targetDate: "",
+        status: "active",
+        skill: "Execution",
+        color: "blue",
+        createdAt: new Date().toISOString()
+    }
+];
+
+const DEFAULT_HABITS = [
+    { id: "habit-no-porn", title: "No porn", category: "recovery", goalId: "goal-clean-mind", targetPerWeek: 7, active: true, createdAt: new Date().toISOString() },
+    { id: "habit-trigger-plan", title: "Run trigger shield", category: "recovery", goalId: "goal-clean-mind", targetPerWeek: 5, active: true, createdAt: new Date().toISOString() },
+    { id: "habit-deep-work", title: "Deep work block", category: "focus", goalId: "goal-focus-career", targetPerWeek: 6, active: true, createdAt: new Date().toISOString() },
+    { id: "habit-contest-practice", title: "Contest practice", category: "learning", goalId: "goal-focus-career", targetPerWeek: 4, active: true, createdAt: new Date().toISOString() },
+    { id: "habit-move-body", title: "Workout or walk", category: "health", goalId: "", targetPerWeek: 5, active: true, createdAt: new Date().toISOString() },
+    { id: "habit-journal", title: "Journal truth", category: "focus", goalId: "", targetPerWeek: 5, active: true, createdAt: new Date().toISOString() }
+];
+
+const AWARDS = [
+    { id: "first_clean", code: "01", title: "First Clean Day", desc: "Logged one clean recovery day.", rule: (s) => s.cleanDays >= 1 },
+    { id: "three_chain", code: "03", title: "Three Day Chain", desc: "Protected a clean streak for three days.", rule: (s) => s.bestStreak >= 3 },
+    { id: "seven_chain", code: "07", title: "Seven Day Chain", desc: "Built one full week of clean proof.", rule: (s) => s.bestStreak >= 7 },
+    { id: "task_slayer", code: "25", title: "Quest Slayer", desc: "Completed 25 tasks.", rule: (s) => s.doneTasks >= 25 },
+    { id: "boss_win", code: "B", title: "Boss Quest Win", desc: "Completed a high-priority task.", rule: (s) => s.bossTasksDone >= 1 },
+    { id: "heat", code: "H", title: "Habit Heat", desc: "Checked 50 habit boxes.", rule: (s) => s.habitChecks >= 50 },
+    { id: "calm_under_fire", code: "C", title: "Calm Under Fire", desc: "Logged an urge of 7+ without relapse.", rule: (s) => s.urgeWins >= 1 },
+    { id: "level_five", code: "L5", title: "Level Five", desc: "Earned enough XP to reach level 5.", rule: (s) => s.level >= 5 }
+];
 
 function toDateKey(date) {
     const year = date.getFullYear();
@@ -68,7 +98,7 @@ function toDateKey(date) {
 }
 
 function parseDateKey(dateKey) {
-    const [year, month, day] = dateKey.split("-").map(Number);
+    const [year, month, day] = String(dateKey).split("-").map(Number);
     return new Date(year, month - 1, day);
 }
 
@@ -79,7 +109,7 @@ function addDays(date, amount) {
 }
 
 function uid() {
-    if (window.crypto && window.crypto.randomUUID) {
+    if (window.crypto?.randomUUID) {
         return window.crypto.randomUUID();
     }
     return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -88,156 +118,109 @@ function uid() {
 function safeJson(value, fallback) {
     try {
         return JSON.parse(value);
-    } catch (error) {
+    } catch {
         return fallback;
     }
 }
 
-/* ── Sound Engine — satisfying micro-sounds ── */
-class SoundFX {
-    constructor() {
-        this.ctx = null;
-        this.enabled = true;
-    }
-    init() {
-        if (this.ctx) return;
-        try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { this.enabled = false; }
-    }
-    play(type) {
-        if (!this.enabled || !this.ctx) return;
-        if (this.ctx.state === 'suspended') this.ctx.resume();
-        const t = this.ctx.currentTime;
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.connect(gain); gain.connect(this.ctx.destination);
-        gain.gain.setValueAtTime(0.08, t);
-        if (type === 'check') {
-            osc.frequency.setValueAtTime(880, t);
-            osc.frequency.exponentialRampToValueAtTime(1320, t + 0.08);
-            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
-            osc.start(t); osc.stop(t + 0.15);
-        } else if (type === 'uncheck') {
-            osc.frequency.setValueAtTime(440, t);
-            osc.frequency.exponentialRampToValueAtTime(330, t + 0.08);
-            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
-            osc.start(t); osc.stop(t + 0.1);
-        } else if (type === 'add') {
-            osc.frequency.setValueAtTime(660, t);
-            osc.frequency.exponentialRampToValueAtTime(990, t + 0.06);
-            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
-            osc.start(t); osc.stop(t + 0.12);
-        } else if (type === 'win') {
-            osc.frequency.setValueAtTime(523, t);
-            osc.frequency.setValueAtTime(659, t + 0.1);
-            osc.frequency.setValueAtTime(784, t + 0.2);
-            osc.frequency.setValueAtTime(1047, t + 0.3);
-            gain.gain.setValueAtTime(0.1, t);
-            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
-            osc.start(t); osc.stop(t + 0.5);
-        } else if (type === 'levelup') {
-            osc.type = 'square';
-            osc.frequency.setValueAtTime(440, t);
-            osc.frequency.setValueAtTime(554, t + 0.12);
-            osc.frequency.setValueAtTime(659, t + 0.24);
-            osc.frequency.setValueAtTime(880, t + 0.36);
-            gain.gain.setValueAtTime(0.06, t);
-            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
-            osc.start(t); osc.stop(t + 0.6);
-        } else if (type === 'combo') {
-            osc.type = 'triangle';
-            osc.frequency.setValueAtTime(1200, t);
-            osc.frequency.exponentialRampToValueAtTime(1800, t + 0.05);
-            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
-            osc.start(t); osc.stop(t + 0.1);
-        }
-    }
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 }
-const sfx = new SoundFX();
+
+function clamp(value, min, max, fallback) {
+    const number = Number.parseInt(value, 10);
+    if (Number.isNaN(number)) {
+        return fallback;
+    }
+    return Math.max(min, Math.min(max, number));
+}
+
+function formatHumanDate(dateKey) {
+    const date = parseDateKey(dateKey);
+    return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+}
+
+function updatedAtMs(value) {
+    const time = Date.parse(value || "");
+    return Number.isNaN(time) ? 0 : time;
+}
+
+function uniqueLines(value, limit = 10) {
+    return String(value || "")
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .slice(0, limit);
+}
 
 class DayForgeApp {
     constructor() {
         this.config = CONFIG;
+        this.apiBase = this.resolveApiBase();
         this.todayKey = toDateKey(new Date());
-        this.currentYear = new Date().getFullYear();
         this.selectedDate = this.todayKey;
+        this.currentYear = new Date().getFullYear();
         this.currentUser = { uid: "local-player", displayName: "Local player", email: "" };
         this.firebaseApp = null;
-        this.firebaseAnalytics = null;
         this.firebaseAuth = null;
         this.firebaseReady = false;
-        this.data = this.loadLocalData(this.currentUser.uid);
-        this.syncTimer = null;
-        this.combo = 0;
-        this.comboTimer = null;
+        this.dayTimers = new Map();
+        this.workspaceTimer = null;
+        this.days = this.loadDays(this.currentUser.uid);
+        this.workspace = this.loadWorkspace(this.currentUser.uid);
         this.lastLevel = 1;
-
-        this.els = {
-            trackerGrid: document.getElementById("trackerGrid"),
-            currentYearDisplay: document.getElementById("currentYearDisplay"),
-            prevYear: document.getElementById("prevYear"),
-            nextYear: document.getElementById("nextYear"),
-            todayLabel: document.getElementById("todayLabel"),
-            headlineText: document.getElementById("headlineText"),
-            userAvatar: document.getElementById("userAvatar"),
-            userName: document.getElementById("userName"),
-            syncState: document.getElementById("syncState"),
-            authButton: document.getElementById("authButton"),
-            syncNowBtn: document.getElementById("syncNowBtn"),
-            levelNumber: document.getElementById("levelNumber"),
-            xpLabel: document.getElementById("xpLabel"),
-            xpFill: document.getElementById("xpFill"),
-            streakCount: document.getElementById("streakCount"),
-            bestStreakCount: document.getElementById("bestStreakCount"),
-            completionMetric: document.getElementById("completionMetric"),
-            completionSubtext: document.getElementById("completionSubtext"),
-            todayXpMetric: document.getElementById("todayXpMetric"),
-            todayXpSubtext: document.getElementById("todayXpSubtext"),
-            perfectDaysMetric: document.getElementById("perfectDaysMetric"),
-            perfectDaysSubtext: document.getElementById("perfectDaysSubtext"),
-            lockRuleMetric: document.getElementById("lockRuleMetric"),
-            panelKicker: document.getElementById("panelKicker"),
-            panelDateTitle: document.getElementById("panelDateTitle"),
-            dayStateBadge: document.getElementById("dayStateBadge"),
-            progressRing: document.getElementById("progressRing"),
-            progressNumber: document.getElementById("progressNumber"),
-            panelXp: document.getElementById("panelXp"),
-            panelProgressText: document.getElementById("panelProgressText"),
-            motivationInput: document.getElementById("motivationInput"),
-            newTaskInput: document.getElementById("newTaskInput"),
-            newTaskPriority: document.getElementById("newTaskPriority"),
-            addTaskBtn: document.getElementById("addTaskBtn"),
-            panelTaskList: document.getElementById("panelTaskList"),
-            btnWon: document.getElementById("btnWon"),
-            btnMissed: document.getElementById("btnMissed"),
-            lockNote: document.getElementById("lockNote"),
-            weekStrip: document.getElementById("weekStrip"),
-            badgeGrid: document.getElementById("badgeGrid"),
-            toastStack: document.getElementById("toastStack"),
-            quoteText: document.getElementById("quoteText"),
-            quoteAuthor: document.getElementById("quoteAuthor"),
-            quoteBanner: document.getElementById("quoteBanner"),
-            weeklyBarChart: document.getElementById("weeklyBarChart"),
-            questRanking: document.getElementById("questRanking"),
-            streakDanger: document.getElementById("streakDanger"),
-            streakDangerText: document.getElementById("streakDangerText"),
-            streakCountdown: document.getElementById("streakCountdown"),
-            nextUnlock: document.getElementById("nextUnlock"),
-            nextUnlockText: document.getElementById("nextUnlockText"),
-            nextUnlockFill: document.getElementById("nextUnlockFill"),
-            nextUnlockSub: document.getElementById("nextUnlockSub")
-        };
-
+        this.els = this.collectElements();
         this.init();
+    }
+
+    collectElements() {
+        const ids = [
+            "userAvatar", "userName", "syncState", "syncNowBtn", "authButton", "levelNumber", "xpLabel", "xpFill",
+            "cleanStreak", "bestStreak", "todayLabel", "headlineText", "quoteText", "quoteAuthor", "currentDateTitle",
+            "prevYear", "nextYear", "currentYearDisplay", "selectedDateInput", "statOverall", "statOverallSub",
+            "statToday", "statTodaySub", "statUrge", "statUrgeSub", "statReminders", "statRemindersSub",
+            "focusLineInput", "moodRange", "energyRange", "urgeRange", "relapseCheck", "gratitudeInput",
+            "reflectionInput", "newTaskInput", "newTaskPriority", "newTaskGoal", "newTaskEstimate", "addTaskBtn",
+            "taskList", "progressRing", "progressNumber", "progressLabel", "progressXp", "progressHint",
+            "claimWinBtn", "markMissedBtn", "panicStartBtn", "heatmapGrid", "habitTitle", "habitCategory",
+            "habitGoal", "habitTarget", "addHabitBtn", "habitMatrix", "goalTitle", "goalWhy", "goalDate",
+            "addGoalBtn", "goalList", "recoveryAddiction", "recoveryWhy", "recoveryTriggers", "recoveryPlan",
+            "saveRecoveryBtn", "panicPlanList", "reminderTitle", "reminderDate", "reminderTime", "reminderCategory",
+            "reminderNotify", "reminderNotes", "addReminderBtn", "reminderList", "notifyEmail", "notifyEnabled",
+            "morningDigest", "morningTime", "eveningReview", "eveningTime", "relapseShield", "relapseShieldTime",
+            "saveNotificationsBtn", "testNotificationBtn", "awardsGrid", "linkedinText", "copyLinkedInBtn",
+            "toastStack"
+        ];
+        return Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
     }
 
     async init() {
         this.bindEvents();
-        document.addEventListener('click', () => sfx.init(), { once: true });
+        this.setInitialFormDates();
         await this.initAuth();
         await this.syncFromCloud({ quiet: true });
         this.renderAll();
-        // Update streak countdown every 60s — keeps urgency alive
-        setInterval(() => this.renderStreakDanger(), 60000);
+    }
+
+    resolveApiBase() {
+        const configured = String(this.config.apiBaseUrl || "").trim().replace(/\/$/, "");
+        if (configured) {
+            return configured;
+        }
+
+        const host = window.location.hostname;
+        const port = window.location.port;
+        const isRender = host.includes("onrender.com");
+        const isBackendLocal = host === "127.0.0.1" || host === "localhost";
+        if (isRender || (isBackendLocal && ["5000", "8000", "10000"].includes(port))) {
+            return window.location.origin;
+        }
+        return "";
     }
 
     bindEvents() {
@@ -253,20 +236,22 @@ class DayForgeApp {
             this.syncFromCloud({ quiet: true });
         });
 
-        document.querySelectorAll("[data-jump-today]").forEach((button) => {
+        this.els.selectedDateInput.addEventListener("change", () => {
+            if (this.els.selectedDateInput.value) {
+                this.selectDate(this.els.selectedDateInput.value);
+            }
+        });
+
+        document.querySelectorAll("[data-scroll-target]").forEach((button) => {
             button.addEventListener("click", () => {
-                this.currentYear = new Date().getFullYear();
-                this.selectDate(this.todayKey);
+                document.querySelectorAll(".nav-btn").forEach((item) => item.classList.remove("active"));
+                button.classList.add("active");
+                document.getElementById(button.dataset.scrollTarget)?.scrollIntoView({ behavior: "smooth", block: "start" });
             });
         });
 
-        document.querySelectorAll("[data-open-auth]").forEach((button) => {
-            button.addEventListener("click", () => this.handleAuthClick());
-        });
-
-        this.els.authButton.addEventListener("click", () => this.handleAuthClick());
         this.els.syncNowBtn.addEventListener("click", () => this.syncFromCloud({ quiet: false }));
-
+        this.els.authButton.addEventListener("click", () => this.handleAuthClick());
         this.els.addTaskBtn.addEventListener("click", () => this.addTask());
         this.els.newTaskInput.addEventListener("keydown", (event) => {
             if (event.key === "Enter") {
@@ -275,21 +260,78 @@ class DayForgeApp {
             }
         });
 
-        this.els.motivationInput.addEventListener("blur", () => this.saveMotivation());
-        this.els.motivationInput.addEventListener("keydown", (event) => {
-            if (event.key === "Enter") {
-                event.preventDefault();
-                this.els.motivationInput.blur();
+        ["focusLineInput", "moodRange", "energyRange", "urgeRange", "relapseCheck", "gratitudeInput", "reflectionInput"].forEach((id) => {
+            const eventName = id.endsWith("Input") || id === "reflectionInput" || id === "gratitudeInput" ? "blur" : "change";
+            this.els[id].addEventListener(eventName, () => this.saveDailyCheckIn());
+        });
+
+        this.els.taskList.addEventListener("change", (event) => {
+            const checkbox = event.target.closest("[data-task-check]");
+            if (checkbox) {
+                this.toggleTask(checkbox.dataset.taskCheck, checkbox.checked);
             }
         });
 
-        this.els.btnWon.addEventListener("click", () => this.setStatus("won"));
-        this.els.btnMissed.addEventListener("click", () => this.setStatus("missed"));
+        this.els.taskList.addEventListener("click", (event) => {
+            const button = event.target.closest("[data-task-delete]");
+            if (button) {
+                this.deleteTask(button.dataset.taskDelete);
+            }
+        });
+
+        this.els.claimWinBtn.addEventListener("click", () => this.setDayStatus("won"));
+        this.els.markMissedBtn.addEventListener("click", () => this.setDayStatus("missed"));
+        this.els.panicStartBtn.addEventListener("click", () => this.startRescuePlan());
+        this.els.addGoalBtn.addEventListener("click", () => this.addGoal());
+        this.els.addHabitBtn.addEventListener("click", () => this.addHabit());
+
+        this.els.goalList.addEventListener("click", (event) => {
+            const button = event.target.closest("[data-goal-action]");
+            if (button) {
+                this.updateGoal(button.dataset.goalAction, button.dataset.goalId);
+            }
+        });
+
+        this.els.habitMatrix.addEventListener("change", (event) => {
+            const checkbox = event.target.closest("[data-habit-check]");
+            if (checkbox) {
+                this.toggleHabit(checkbox.dataset.habitCheck, checkbox.dataset.dateKey, checkbox.checked);
+            }
+        });
+
+        this.els.addReminderBtn.addEventListener("click", () => this.addReminder());
+        this.els.reminderList.addEventListener("change", (event) => {
+            const checkbox = event.target.closest("[data-reminder-check]");
+            if (checkbox) {
+                this.toggleReminder(checkbox.dataset.reminderCheck, checkbox.checked);
+            }
+        });
+        this.els.reminderList.addEventListener("click", (event) => {
+            const button = event.target.closest("[data-reminder-delete]");
+            if (button) {
+                this.deleteReminder(button.dataset.reminderDelete);
+            }
+        });
+
+        this.els.saveRecoveryBtn.addEventListener("click", () => this.saveRecoveryPlan());
+        this.els.saveNotificationsBtn.addEventListener("click", () => this.saveNotificationSettings());
+        this.els.testNotificationBtn.addEventListener("click", () => this.sendTestNotification());
+        this.els.copyLinkedInBtn.addEventListener("click", () => this.copyLinkedInText());
+    }
+
+    setInitialFormDates() {
+        const nextHour = new Date();
+        nextHour.setHours(nextHour.getHours() + 1, 0, 0, 0);
+        this.els.selectedDateInput.value = this.selectedDate;
+        this.els.reminderDate.value = this.todayKey;
+        this.els.reminderTime.value = `${String(nextHour.getHours()).padStart(2, "0")}:00`;
+        this.els.goalDate.value = toDateKey(addDays(new Date(), 90));
     }
 
     async initAuth() {
         if (!this.hasFirebaseConfig()) {
-            this.setSyncState("Local save ready");
+            this.updateAuthUi();
+            this.setSyncState(this.apiBase ? "Cloud API ready" : "Saved on this device");
             return;
         }
 
@@ -297,12 +339,9 @@ class DayForgeApp {
             this.firebaseApp = initializeApp(this.config.firebase);
             this.firebaseAuth = getAuth(this.firebaseApp);
             this.firebaseReady = true;
-
-            if (this.config.firebase.measurementId && await analyticsIsSupported()) {
-                this.firebaseAnalytics = getAnalytics(this.firebaseApp);
-            }
-        } catch (error) {
+        } catch {
             this.setSyncState("Firebase config needs attention");
+            this.updateAuthUi();
             return;
         }
 
@@ -319,50 +358,185 @@ class DayForgeApp {
         });
     }
 
-    async applyAuthUser(user) {
-        if (!user) {
-            this.currentUser = { uid: "local-player", displayName: "Local player", email: "" };
-            this.data = this.loadLocalData(this.currentUser.uid);
-            this.updateAuthUi();
-            return;
-        }
-
-        const previousData = this.data;
-        const shouldMergeGuestData = this.currentUser.uid === "local-player";
-        this.currentUser = {
-            uid: user.uid,
-            displayName: user.displayName || user.email || "DayForge player",
-            email: user.email || ""
-        };
-        this.data = shouldMergeGuestData
-            ? this.mergeDayMaps(this.loadLocalData(user.uid), previousData)
-            : this.loadLocalData(user.uid);
-        this.saveLocalData();
-        this.updateAuthUi();
-        await this.syncFromCloud({ quiet: true });
-    }
-
     hasFirebaseConfig() {
         const firebaseConfig = this.config.firebase || {};
         return Boolean(firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.projectId && firebaseConfig.appId);
     }
 
     hasCloudApi() {
-        return Boolean((this.config.apiBaseUrl || "").trim());
+        return Boolean(this.apiBase);
     }
 
-    storageKey(uidValue = this.currentUser.uid) {
-        return `dayforge_v1_${uidValue}`;
+    async applyAuthUser(user) {
+        const previousDays = this.days;
+        const previousWorkspace = this.workspace;
+        const wasGuest = this.currentUser.uid === "local-player";
+
+        if (!user) {
+            this.currentUser = { uid: "local-player", displayName: "Local player", email: "" };
+            this.days = this.loadDays(this.currentUser.uid);
+            this.workspace = this.loadWorkspace(this.currentUser.uid);
+            this.updateAuthUi();
+            return;
+        }
+
+        this.currentUser = {
+            uid: user.uid,
+            displayName: user.displayName || user.email || "DayForge player",
+            email: user.email || ""
+        };
+
+        this.days = wasGuest ? this.mergeDayMaps(this.loadDays(user.uid), previousDays) : this.loadDays(user.uid);
+        this.workspace = wasGuest ? this.mergeWorkspace(this.loadWorkspace(user.uid), previousWorkspace) : this.loadWorkspace(user.uid);
+        if (!this.workspace.profile.displayName) {
+            this.workspace.profile.displayName = this.currentUser.displayName;
+        }
+        if (!this.workspace.notificationSettings.email && this.currentUser.email) {
+            this.workspace.notificationSettings.email = this.currentUser.email;
+        }
+        this.saveLocal();
+        this.updateAuthUi();
+        await this.syncFromCloud({ quiet: true });
     }
 
-    loadLocalData(uidValue) {
-        const raw = localStorage.getItem(this.storageKey(uidValue));
-        const parsed = safeJson(raw, {});
-        return this.normalizeDayMap(parsed || {});
+    storageKey(kind, uidValue = this.currentUser.uid) {
+        return `dayforge_v2_${kind}_${uidValue}`;
     }
 
-    saveLocalData() {
-        localStorage.setItem(this.storageKey(), JSON.stringify(this.data));
+    loadDays(uidValue) {
+        const raw = localStorage.getItem(this.storageKey("days", uidValue));
+        const parsed = safeJson(raw, null);
+        if (parsed) {
+            return this.normalizeDayMap(parsed);
+        }
+        const legacy = safeJson(localStorage.getItem(`dayforge_v1_${uidValue}`), {});
+        return this.normalizeDayMap(legacy || {});
+    }
+
+    loadWorkspace(uidValue) {
+        const raw = localStorage.getItem(this.storageKey("workspace", uidValue));
+        return this.normalizeWorkspace(safeJson(raw, null));
+    }
+
+    saveLocal() {
+        localStorage.setItem(this.storageKey("days"), JSON.stringify(this.days));
+        localStorage.setItem(this.storageKey("workspace"), JSON.stringify(this.workspace));
+    }
+
+    defaultWorkspace() {
+        return {
+            profile: {
+                displayName: this.currentUser.displayName === "Local player" ? "" : this.currentUser.displayName,
+                mission: "Remove addiction. Focus on the goal. Build proof daily.",
+                identity: "I am the kind of person who keeps promises to myself."
+            },
+            recovery: {
+                addictionName: "porn",
+                why: "",
+                triggers: ["Late-night phone use", "Stress after failure", "Being alone without a plan"],
+                rescuePlan: ["Stand up and leave the room", "Drink water and breathe for 60 seconds", "Open DayForge and finish one small quest"]
+            },
+            goals: DEFAULT_GOALS.map((goal) => ({ ...goal })),
+            habits: DEFAULT_HABITS.map((habit) => ({ ...habit })),
+            reminders: [],
+            notificationSettings: {
+                enabled: false,
+                email: this.currentUser.email || "",
+                timezone: this.config.appTimezone || "Asia/Kolkata",
+                morningDigest: true,
+                morningTime: "07:30",
+                eveningReview: true,
+                eveningTime: "21:30",
+                relapseShield: true,
+                relapseShieldTime: "22:45",
+                lastMorningDigestKey: "",
+                lastEveningReviewKey: "",
+                lastRelapseShieldKey: ""
+            },
+            updatedAt: new Date().toISOString()
+        };
+    }
+
+    normalizeWorkspace(workspace) {
+        const base = this.defaultWorkspace();
+        const source = workspace && typeof workspace === "object" ? workspace : {};
+        const hasGoals = Array.isArray(source.goals);
+        const hasHabits = Array.isArray(source.habits);
+        const hasReminders = Array.isArray(source.reminders);
+        const settings = source.notificationSettings || {};
+
+        return {
+            profile: {
+                ...base.profile,
+                ...(source.profile || {})
+            },
+            recovery: {
+                ...base.recovery,
+                ...(source.recovery || {}),
+                triggers: Array.isArray(source.recovery?.triggers) ? source.recovery.triggers.slice(0, 10) : base.recovery.triggers,
+                rescuePlan: Array.isArray(source.recovery?.rescuePlan) ? source.recovery.rescuePlan.slice(0, 10) : base.recovery.rescuePlan
+            },
+            goals: (hasGoals ? source.goals : base.goals).map((goal) => this.normalizeGoal(goal)).filter(Boolean).slice(0, 24),
+            habits: (hasHabits ? source.habits : base.habits).map((habit) => this.normalizeHabit(habit)).filter(Boolean).slice(0, 40),
+            reminders: (hasReminders ? source.reminders : base.reminders).map((reminder) => this.normalizeReminder(reminder)).filter(Boolean).slice(0, 180),
+            notificationSettings: {
+                ...base.notificationSettings,
+                ...settings,
+                enabled: Boolean(settings.enabled),
+                morningDigest: settings.morningDigest !== false,
+                eveningReview: settings.eveningReview !== false,
+                relapseShield: settings.relapseShield !== false
+            },
+            updatedAt: source.updatedAt || new Date().toISOString()
+        };
+    }
+
+    normalizeGoal(goal = {}) {
+        const title = String(goal.title || "").trim().slice(0, 90);
+        if (!title) return null;
+        return {
+            id: goal.id || uid(),
+            title,
+            why: String(goal.why || "").trim().slice(0, 220),
+            targetDate: /^\d{4}-\d{2}-\d{2}$/.test(goal.targetDate || "") ? goal.targetDate : "",
+            status: ["active", "paused", "completed"].includes(goal.status) ? goal.status : "active",
+            skill: String(goal.skill || "").trim().slice(0, 80),
+            color: String(goal.color || "mint").trim().slice(0, 24),
+            createdAt: goal.createdAt || new Date().toISOString()
+        };
+    }
+
+    normalizeHabit(habit = {}) {
+        const title = String(habit.title || "").trim().slice(0, 90);
+        if (!title) return null;
+        return {
+            id: habit.id || uid(),
+            title,
+            category: String(habit.category || "focus").trim().slice(0, 40),
+            goalId: String(habit.goalId || "").trim().slice(0, 80),
+            targetPerWeek: clamp(habit.targetPerWeek, 1, 7, 5),
+            active: habit.active !== false,
+            createdAt: habit.createdAt || new Date().toISOString()
+        };
+    }
+
+    normalizeReminder(reminder = {}) {
+        const title = String(reminder.title || "").trim().slice(0, 120);
+        if (!title) return null;
+        return {
+            id: reminder.id || uid(),
+            title,
+            notes: String(reminder.notes || "").trim().slice(0, 400),
+            date: /^\d{4}-\d{2}-\d{2}$/.test(reminder.date || "") ? reminder.date : this.todayKey,
+            time: /^\d{2}:\d{2}$/.test(reminder.time || "") ? reminder.time : "09:00",
+            category: String(reminder.category || "focus").trim().slice(0, 40),
+            goalId: String(reminder.goalId || "").trim().slice(0, 80),
+            notify: reminder.notify !== false,
+            done: Boolean(reminder.done),
+            lastNotifiedKey: String(reminder.lastNotifiedKey || "").trim().slice(0, 40),
+            createdAt: reminder.createdAt || new Date().toISOString(),
+            updatedAt: reminder.updatedAt || new Date().toISOString()
+        };
     }
 
     normalizeDayMap(map) {
@@ -377,46 +551,85 @@ class DayForgeApp {
 
     normalizeDay(dateKey, day = {}) {
         const tasks = Array.isArray(day.tasks) ? day.tasks : [];
-        const status = ["neutral", "won", "missed"].includes(day.status) ? day.status : "neutral";
+        const habitChecks = day.habitChecks && typeof day.habitChecks === "object" ? day.habitChecks : {};
+        const focusLine = String(day.focusLine || day.motivation || "").trim().slice(0, 180);
         return {
             dateKey,
-            status,
-            motivation: String(day.motivation || "").slice(0, 120),
-            updatedAt: day.updatedAt || new Date().toISOString(),
-            tasks: tasks.map((task) => ({
-                id: task.id || uid(),
-                text: String(task.text || "Untitled quest").slice(0, 90),
-                done: Boolean(task.done),
-                priority: ["low", "medium", "high"].includes(task.priority) ? task.priority : "medium",
-                createdAt: task.createdAt || new Date().toISOString(),
-                completedAt: task.completedAt || null
-            }))
+            status: ["neutral", "won", "missed"].includes(day.status) ? day.status : "neutral",
+            focusLine,
+            motivation: focusLine,
+            mood: clamp(day.mood, 1, 5, 3),
+            energy: clamp(day.energy, 1, 5, 3),
+            urge: clamp(day.urge, 0, 10, 0),
+            relapse: Boolean(day.relapse),
+            gratitude: String(day.gratitude || "").trim().slice(0, 220),
+            reflection: String(day.reflection || "").trim().slice(0, 700),
+            habitChecks: Object.fromEntries(Object.entries(habitChecks).map(([key, value]) => [key, Boolean(value)])),
+            tasks: tasks.map((task) => {
+                const title = String(task.title || task.text || "").trim().slice(0, 110);
+                if (!title) return null;
+                return {
+                    id: task.id || uid(),
+                    title,
+                    text: title,
+                    done: Boolean(task.done),
+                    priority: ["low", "medium", "high"].includes(task.priority) ? task.priority : "medium",
+                    goalId: String(task.goalId || "").trim().slice(0, 80),
+                    habitId: String(task.habitId || "").trim().slice(0, 80),
+                    estimateMins: clamp(task.estimateMins, 5, 480, 25),
+                    createdAt: task.createdAt || new Date().toISOString(),
+                    completedAt: task.completedAt || null
+                };
+            }).filter(Boolean).slice(0, 100),
+            updatedAt: day.updatedAt || new Date().toISOString()
         };
     }
 
-    getDay(dateKey, create = true) {
-        if (!this.data[dateKey] && create) {
-            this.data[dateKey] = this.normalizeDay(dateKey, { dateKey, status: "neutral", motivation: "", tasks: [] });
-        }
-        return this.data[dateKey] || null;
-    }
-
-    touchDay(dateKey) {
-        const day = this.getDay(dateKey);
-        day.updatedAt = new Date().toISOString();
-        return day;
-    }
-
-    mergeDayMaps(localMap, incomingMap) {
-        const merged = { ...this.normalizeDayMap(localMap) };
+    mergeDayMaps(baseMap, incomingMap) {
+        const merged = { ...this.normalizeDayMap(baseMap) };
         const incoming = this.normalizeDayMap(incomingMap);
         Object.entries(incoming).forEach(([dateKey, day]) => {
             const existing = merged[dateKey];
-            if (!existing || new Date(day.updatedAt).getTime() >= new Date(existing.updatedAt).getTime()) {
+            if (!existing || updatedAtMs(day.updatedAt) >= updatedAtMs(existing.updatedAt)) {
                 merged[dateKey] = day;
             }
         });
         return merged;
+    }
+
+    mergeWorkspace(localWorkspace, incomingWorkspace) {
+        const local = this.normalizeWorkspace(localWorkspace);
+        const incoming = this.normalizeWorkspace(incomingWorkspace);
+        if (this.isBlankWorkspace(incoming) && !this.isBlankWorkspace(local)) {
+            return local;
+        }
+        return updatedAtMs(incoming.updatedAt) >= updatedAtMs(local.updatedAt) ? incoming : local;
+    }
+
+    isBlankWorkspace(workspace) {
+        return !workspace.goals.length
+            && !workspace.habits.length
+            && !workspace.reminders.length
+            && !workspace.profile?.mission
+            && !workspace.profile?.displayName
+            && !workspace.recovery?.why;
+    }
+
+    getDay(dateKey, create = true) {
+        if (!this.days[dateKey] && create) {
+            this.days[dateKey] = this.normalizeDay(dateKey, { dateKey });
+        }
+        return this.days[dateKey] || null;
+    }
+
+    touchDay(dateKey) {
+        const day = this.getDay(dateKey, true);
+        day.updatedAt = new Date().toISOString();
+        return day;
+    }
+
+    touchWorkspace() {
+        this.workspace.updatedAt = new Date().toISOString();
     }
 
     selectDate(dateKey) {
@@ -425,792 +638,361 @@ class DayForgeApp {
         this.renderAll();
     }
 
-    canEditDate(dateKey) {
-        return dateKey >= this.todayKey;
-    }
-
-    canProgressDate(dateKey) {
-        return dateKey === this.todayKey;
-    }
-
-    isPastDate(dateKey) {
-        return dateKey < this.todayKey;
-    }
-
-    isFutureDate(dateKey) {
-        return dateKey > this.todayKey;
-    }
-
-    taskXp(task) {
-        return XP_BY_PRIORITY[task.priority] || XP_BY_PRIORITY.medium;
-    }
-
-    dayProgress(day) {
-        if (!day || !day.tasks.length) {
-            return { total: 0, done: 0, pct: 0 };
-        }
-        const done = day.tasks.filter((task) => task.done).length;
-        return {
-            total: day.tasks.length,
-            done,
-            pct: Math.round((done / day.tasks.length) * 100)
-        };
-    }
-
-    isValidWin(day) {
-        const progress = this.dayProgress(day);
-        return Boolean(day && day.status === "won" && progress.total > 0 && progress.done === progress.total);
-    }
-
-    dayXp(day) {
-        if (!day) {
-            return 0;
-        }
-        const taskScore = day.tasks.reduce((total, task) => total + (task.done ? this.taskXp(task) : 0), 0);
-        const perfectBonus = this.isValidWin(day) ? 40 : 0;
-        return taskScore + perfectBonus;
-    }
-
-    calculateStats() {
-        const allDates = Object.keys(this.data).sort();
-        const firstOfYear = `${this.currentYear}-01-01`;
-        const lastOfYear = `${this.currentYear}-12-31`;
-        const todayInYear = this.currentYear === new Date().getFullYear()
-            ? this.todayKey
-            : lastOfYear;
-        const yearDates = allDates.filter((dateKey) => dateKey >= firstOfYear && dateKey <= lastOfYear);
-        const playableEnd = todayInYear < firstOfYear ? firstOfYear : todayInYear;
-        const elapsedDays = this.daysBetween(firstOfYear, playableEnd) + 1;
-
-        let wins = 0;
-        let perfectDays = 0;
-        let doneTasks = 0;
-        let plannedTasks = 0;
-        let totalXp = 0;
-
-        allDates.forEach((dateKey) => {
-            const day = this.data[dateKey];
-            totalXp += this.dayXp(day);
-            doneTasks += day.tasks.filter((task) => task.done).length;
-            plannedTasks += day.tasks.length;
-        });
-
-        yearDates.forEach((dateKey) => {
-            const day = this.data[dateKey];
-            if (dateKey <= this.todayKey && this.isValidWin(day)) {
-                wins += 1;
-                perfectDays += 1;
-            }
-        });
-
-        const streak = this.calculateCurrentStreak();
-        const bestStreak = this.calculateBestStreak();
-        const level = Math.floor(totalXp / 500) + 1;
-        const xpIntoLevel = totalXp % 500;
-        const completion = elapsedDays > 0 ? Math.round((wins / elapsedDays) * 100) : 0;
-
-        return {
-            wins,
-            perfectDays,
-            doneTasks,
-            plannedTasks,
-            totalXp,
-            level,
-            xpIntoLevel,
-            completion,
-            streak,
-            bestStreak,
-            todayXp: this.dayXp(this.getDay(this.todayKey, false))
-        };
-    }
-
-    daysBetween(startKey, endKey) {
-        const start = parseDateKey(startKey);
-        const end = parseDateKey(endKey);
-        return Math.max(0, Math.round((end - start) / 86400000));
-    }
-
-    calculateCurrentStreak() {
-        let streak = 0;
-        let cursor = parseDateKey(this.todayKey);
-
-        for (let index = 0; index < 730; index += 1) {
-            const dateKey = toDateKey(cursor);
-            const day = this.data[dateKey];
-            const isToday = dateKey === this.todayKey;
-
-            if (this.isValidWin(day)) {
-                streak += 1;
-            } else if (!isToday) {
-                break;
-            }
-
-            cursor = addDays(cursor, -1);
-        }
-
-        return streak;
-    }
-
-    calculateBestStreak() {
-        const dateKeys = Object.keys(this.data).filter((dateKey) => dateKey <= this.todayKey).sort();
-        if (!dateKeys.length) {
-            return 0;
-        }
-
-        let best = 0;
-        let current = 0;
-        let cursor = parseDateKey(dateKeys[0]);
-        const end = parseDateKey(this.todayKey);
-
-        while (cursor <= end) {
-            const dateKey = toDateKey(cursor);
-            if (this.isValidWin(this.data[dateKey])) {
-                current += 1;
-                best = Math.max(best, current);
-            } else {
-                current = 0;
-            }
-            cursor = addDays(cursor, 1);
-        }
-
-        return best;
-    }
-
-    renderAll() {
-        this.todayKey = toDateKey(new Date());
-        this.renderHeader();
-        this.renderGrid();
-        this.renderPanel();
-        this.renderStats();
-        this.renderWeek();
-        this.renderBadges();
-        this.renderQuote();
-        this.renderBarChart();
-        this.renderQuestRanking();
-        this.renderStreakDanger();
-        this.renderNextUnlock();
-        this.updateAuthUi();
-    }
-
-    renderHeader() {
-        const today = new Date();
-        this.els.todayLabel.textContent = today.toLocaleDateString("en-US", {
-            weekday: "long",
-            month: "short",
-            day: "numeric"
-        });
-        const todayDay = this.getDay(this.todayKey, false);
-        const progress = this.dayProgress(todayDay);
-        const stats = this.calculateStats();
-        const hour = today.getHours();
-        if (!todayDay || progress.total === 0) {
-            const lines = hour < 12
-                ? ["Good morning, champion. Set your quests.", "Rise and grind. What will you conquer?", "New day, new power. Add your quests."]
-                : hour < 17
-                    ? ["Afternoon forge. Build something great.", "Half the day left. Make it count."]
-                    : ["Evening session. Still time to win.", "Night ops active. Forge ahead."];
-            this.els.headlineText.textContent = lines[Math.floor(Math.random() * lines.length)];
-        } else if (this.isValidWin(todayDay)) {
-            const winLines = ["🏆 Today is sealed. You crushed it.", "⚡ Perfect day. Absolute legend.", "🔥 All quests done. Unstoppable."];
-            this.els.headlineText.textContent = winLines[Math.floor(Math.random() * winLines.length)];
-        } else {
-            const pct = progress.pct;
-            if (pct >= 75) this.els.headlineText.textContent = `Almost there! ${progress.done}/${progress.total} — finish strong 💪`;
-            else if (pct >= 50) this.els.headlineText.textContent = `${progress.done} of ${progress.total} done. Keep the momentum.`;
-            else this.els.headlineText.textContent = `${progress.done} of ${progress.total} quests. Let's go! 🎯`;
-        }
-        if (stats.streak >= 3) {
-            this.els.todayLabel.textContent += ` • 🔥 ${stats.streak} day streak!`;
-        }
-    }
-
-    renderGrid() {
-        this.els.currentYearDisplay.textContent = String(this.currentYear);
-        this.els.trackerGrid.innerHTML = "";
-
-        MONTHS.forEach((month, monthIndex) => {
-            const row = document.createElement("div");
-            row.className = "month-row";
-
-            const label = document.createElement("div");
-            label.className = "month-label";
-            label.textContent = month;
-            row.appendChild(label);
-
-            const daysInMonth = new Date(this.currentYear, monthIndex + 1, 0).getDate();
-
-            for (let dayNumber = 1; dayNumber <= 31; dayNumber += 1) {
-                if (dayNumber > daysInMonth) {
-                    const emptyCell = document.createElement("div");
-                    emptyCell.className = "day-cell empty";
-                    row.appendChild(emptyCell);
-                    continue;
-                }
-
-                const dateKey = `${this.currentYear}-${String(monthIndex + 1).padStart(2, "0")}-${String(dayNumber).padStart(2, "0")}`;
-                const day = this.getDay(dateKey, false);
-                const progress = this.dayProgress(day);
-                const cell = document.createElement("button");
-                cell.type = "button";
-                cell.className = "day-cell";
-                cell.style.setProperty("--fill", `${progress.pct}%`);
-                cell.title = `${dateKey} - ${progress.done}/${progress.total} quests`;
-
-                if (dateKey === this.todayKey) cell.classList.add("today");
-                if (dateKey === this.selectedDate) cell.classList.add("selected");
-                if (this.isPastDate(dateKey)) cell.classList.add("locked");
-                if (day) {
-                    if (this.isValidWin(day)) {
-                        cell.classList.add("won");
-                    } else if (day.status === "missed") {
-                        cell.classList.add("missed");
-                    } else if (day.tasks.length > 0 || day.motivation) {
-                        cell.classList.add("planned");
-                    }
-                }
-
-                const number = document.createElement("span");
-                number.className = "date-number";
-                number.textContent = String(dayNumber);
-                cell.appendChild(number);
-                cell.addEventListener("click", () => this.selectDate(dateKey));
-                row.appendChild(cell);
-            }
-
-            this.els.trackerGrid.appendChild(row);
-        });
-    }
-
-    renderPanel() {
-        const day = this.getDay(this.selectedDate);
-        const progress = this.dayProgress(day);
-        const canEdit = this.canEditDate(this.selectedDate);
-        const canProgress = this.canProgressDate(this.selectedDate);
-        const allDone = progress.total > 0 && progress.done === progress.total;
-        const date = parseDateKey(this.selectedDate);
-
-        this.els.panelKicker.textContent = this.isPastDate(this.selectedDate)
-            ? "Archived day"
-            : this.isFutureDate(this.selectedDate)
-                ? "Plan ahead"
-                : "Today";
-        this.els.panelDateTitle.textContent = date.toLocaleDateString("en-US", {
-            weekday: "long",
-            month: "long",
-            day: "numeric",
-            year: "numeric"
-        });
-
-        this.els.dayStateBadge.className = "day-badge";
-        if (this.isPastDate(this.selectedDate)) {
-            this.els.dayStateBadge.textContent = this.isValidWin(day) ? "Locked win" : "Locked";
-            this.els.dayStateBadge.classList.add("locked");
-        } else if (this.isValidWin(day)) {
-            this.els.dayStateBadge.textContent = "Won";
-            this.els.dayStateBadge.classList.add("win");
-        } else if (day.status === "missed") {
-            this.els.dayStateBadge.textContent = "Missed";
-            this.els.dayStateBadge.classList.add("miss");
-        } else if (this.isFutureDate(this.selectedDate)) {
-            this.els.dayStateBadge.textContent = "Planned";
-        } else {
-            this.els.dayStateBadge.textContent = "Ready";
-        }
-
-        this.els.progressRing.style.setProperty("--progress", progress.pct);
-        this.els.progressNumber.textContent = `${progress.pct}%`;
-        this.els.panelXp.textContent = `${this.dayXp(day)} XP`;
-        this.els.panelProgressText.textContent = progress.total
-            ? `${progress.done} of ${progress.total} quests done`
-            : "No quests yet";
-
-        this.els.motivationInput.value = day.motivation || "";
-        this.els.motivationInput.disabled = !canEdit;
-        this.els.newTaskInput.disabled = !canEdit;
-        this.els.newTaskPriority.disabled = !canEdit;
-        this.els.addTaskBtn.disabled = !canEdit;
-        this.els.btnWon.disabled = !canProgress || !allDone;
-        this.els.btnMissed.disabled = !canProgress;
-        this.els.btnWon.classList.toggle("active", day.status === "won");
-        this.els.btnMissed.classList.toggle("active", day.status === "missed");
-        this.els.lockNote.hidden = !this.isPastDate(this.selectedDate);
-
-        this.renderTasks(day, canEdit, canProgress);
-    }
-
-    renderTasks(day, canEdit, canProgress) {
-        this.els.panelTaskList.innerHTML = "";
-
-        if (!day.tasks.length) {
-            const empty = document.createElement("div");
-            empty.className = "task-empty";
-            empty.textContent = canEdit ? "Add the first quest for this day." : "No quests were recorded.";
-            this.els.panelTaskList.appendChild(empty);
-            return;
-        }
-
-        day.tasks.forEach((task) => {
-            const item = document.createElement("div");
-            item.className = `task-item${task.done ? " done" : ""}`;
-
-            const checkbox = document.createElement("input");
-            checkbox.type = "checkbox";
-            checkbox.className = "task-check";
-            checkbox.checked = task.done;
-            checkbox.disabled = !canProgress;
-            checkbox.addEventListener("change", () => this.toggleTask(task.id, checkbox.checked));
-
-            const body = document.createElement("div");
-            const title = document.createElement("div");
-            title.className = "task-title";
-            title.textContent = task.text;
-
-            const meta = document.createElement("div");
-            meta.className = "task-meta";
-
-            const priority = document.createElement("span");
-            priority.className = "task-pill";
-            priority.textContent = PRIORITY_LABELS[task.priority] || "Core";
-
-            const xp = document.createElement("span");
-            xp.className = "task-pill";
-            xp.textContent = `${this.taskXp(task)} XP`;
-
-            meta.append(priority, xp);
-            body.append(title, meta);
-
-            const remove = document.createElement("button");
-            remove.className = "delete-task";
-            remove.type = "button";
-            remove.disabled = !canEdit;
-            remove.setAttribute("aria-label", `Delete ${task.text}`);
-            remove.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"></path><path d="M10 11v6M14 11v6"></path><path d="M6 7l1 14h10l1-14"></path><path d="M9 7V4h6v3"></path></svg>';
-            remove.addEventListener("click", () => this.deleteTask(task.id));
-
-            item.append(checkbox, body, remove);
-            this.els.panelTaskList.appendChild(item);
-        });
-    }
-
-    renderStats() {
-        const stats = this.calculateStats();
-        this.els.completionMetric.textContent = `${stats.completion}%`;
-        this.els.completionSubtext.textContent = `${stats.wins} wins this year`;
-        this.els.todayXpMetric.textContent = String(stats.todayXp);
-        this.els.todayXpSubtext.textContent = stats.todayXp > 0 ? "Scored today" : "Finish quests to score";
-        this.els.perfectDaysMetric.textContent = String(stats.perfectDays);
-        this.els.perfectDaysSubtext.textContent = `${stats.doneTasks} quests completed`;
-        this.els.lockRuleMetric.textContent = "On";
-        this.els.levelNumber.textContent = String(stats.level);
-        this.els.xpLabel.textContent = `${stats.xpIntoLevel} / 500 XP`;
-        this.els.xpFill.style.width = `${Math.round((stats.xpIntoLevel / 500) * 100)}%`;
-        this.els.streakCount.textContent = String(stats.streak);
-        this.els.bestStreakCount.textContent = String(stats.bestStreak);
-    }
-
-    renderWeek() {
-        this.els.weekStrip.innerHTML = "";
-        const today = parseDateKey(this.todayKey);
-
-        for (let offset = 6; offset >= 0; offset -= 1) {
-            const date = addDays(today, -offset);
-            const dateKey = toDateKey(date);
-            const day = this.getDay(dateKey, false);
-            const progress = this.dayProgress(day);
-            const card = document.createElement("div");
-            card.className = "week-day";
-
-            const label = document.createElement("strong");
-            label.textContent = date.toLocaleDateString("en-US", { weekday: "short", day: "numeric" });
-
-            const bar = document.createElement("div");
-            bar.className = "mini-bar";
-            const fill = document.createElement("span");
-            fill.style.width = `${progress.pct}%`;
-            bar.appendChild(fill);
-
-            const text = document.createElement("p");
-            text.textContent = this.isValidWin(day)
-                ? "Won"
-                : day && day.status === "missed"
-                    ? "Missed"
-                    : `${progress.done}/${progress.total} done`;
-
-            card.append(label, bar, text);
-            card.addEventListener("click", () => this.selectDate(dateKey));
-            this.els.weekStrip.appendChild(card);
-        }
-    }
-
-    renderBadges() {
-        const stats = this.calculateStats();
-        const badges = [
-            { title: "First Strike", desc: "Complete 1 quest", unlocked: stats.doneTasks >= 1 },
-            { title: "Clean Win", desc: "Seal 1 perfect day", unlocked: stats.perfectDays >= 1 },
-            { title: "Chain Seven", desc: "Reach a 7 day streak", unlocked: stats.bestStreak >= 7 },
-            { title: "Tasksmith", desc: "Complete 30 quests", unlocked: stats.doneTasks >= 30 },
-            { title: "Deep Work", desc: "Complete a Boss quest", unlocked: this.hasCompletedBossQuest() },
-            { title: "Seasoned", desc: "Seal 10 perfect days", unlocked: stats.perfectDays >= 10 }
-        ];
-
-        this.els.badgeGrid.innerHTML = "";
-        badges.forEach((badge) => {
-            const node = document.createElement("div");
-            node.className = `badge${badge.unlocked ? " unlocked" : ""}`;
-
-            const title = document.createElement("strong");
-            title.textContent = badge.title;
-            const desc = document.createElement("p");
-            desc.textContent = badge.desc;
-
-            node.append(title, desc);
-            this.els.badgeGrid.appendChild(node);
-        });
-    }
-
-    renderStreakDanger() {
-        if (!this.els.streakDanger) return;
-        const stats = this.calculateStats();
-        const todayDay = this.getDay(this.todayKey, false);
-        const todayProgress = this.dayProgress(todayDay);
-
-        // Show danger if user has an active streak but hasn't completed today
-        if (stats.streak >= 1 && todayProgress.pct < 100) {
-            this.els.streakDanger.hidden = false;
-
-            // Calculate time until midnight
-            const now = new Date();
-            const midnight = new Date(now);
-            midnight.setHours(23, 59, 59, 999);
-            const msLeft = midnight - now;
-            const hoursLeft = Math.floor(msLeft / 3600000);
-            const minsLeft = Math.floor((msLeft % 3600000) / 60000);
-
-            if (stats.streak >= 7) {
-                this.els.streakDangerText.textContent = `${stats.streak}-day streak at risk!`;
-            } else if (stats.streak >= 3) {
-                this.els.streakDangerText.textContent = `Don't lose your ${stats.streak}-day streak!`;
-            } else {
-                this.els.streakDangerText.textContent = `Keep your streak alive!`;
-            }
-
-            if (hoursLeft > 0) {
-                this.els.streakCountdown.textContent = `${hoursLeft}h ${minsLeft}m until midnight`;
-            } else {
-                this.els.streakCountdown.textContent = `Only ${minsLeft} minutes left!`;
-                this.els.streakDanger.classList.add('urgent');
-            }
-        } else {
-            this.els.streakDanger.hidden = true;
-            this.els.streakDanger.classList.remove('urgent');
-        }
-    }
-
-    renderNextUnlock() {
-        if (!this.els.nextUnlock) return;
-        const stats = this.calculateStats();
-        const badges = this.buildBadges();
-
-        // Find the next locked badge that's closest to being unlocked
-        const nearMisses = badges
-            .filter(b => !b.unlocked)
-            .map(b => {
-                let progress = 0, target = 1;
-                if (b.title === 'Chain Three') { progress = stats.streak; target = 3; }
-                else if (b.title === 'Chain Seven') { progress = stats.streak; target = 7; }
-                else if (b.title === 'Chain Fourteen') { progress = stats.streak; target = 14; }
-                else if (b.title === 'First Blood') { progress = stats.wonDays; target = 1; }
-                else if (b.title === 'Boss Slayer') { progress = this.hasCompletedBossQuest() ? 1 : 0; target = 1; }
-                else if (b.title === 'Centurion') { progress = stats.totalXp; target = 10000; }
-                else { return null; }
-                return { ...b, progress, target, pct: Math.min(Math.round((progress / target) * 100), 99) };
-            })
-            .filter(b => b && b.pct > 0 && b.pct < 100)
-            .sort((a, b) => b.pct - a.pct);
-
-        if (nearMisses.length > 0) {
-            const next = nearMisses[0];
-            this.els.nextUnlock.hidden = false;
-            this.els.nextUnlockText.textContent = `${next.icon} ${next.title}`;
-            this.els.nextUnlockFill.style.width = `${next.pct}%`;
-            this.els.nextUnlockSub.textContent = `${next.progress} / ${next.target} — ${100 - next.pct}% to go`;
-        } else {
-            this.els.nextUnlock.hidden = true;
-        }
-    }
-
-    renderQuote() {
-        if (!this.els.quoteText) return;
-        const idx = Math.floor((Date.now() / 86400000)) % WIN_QUOTES.length;
-        const q = WIN_QUOTES[idx];
-        const iconIdx = idx % QUOTE_ICONS.length;
-        this.els.quoteText.textContent = q.text;
-        this.els.quoteAuthor.textContent = `— ${q.author}`;
-        const iconEl = this.els.quoteBanner?.querySelector('.quote-icon');
-        if (iconEl) iconEl.textContent = QUOTE_ICONS[iconIdx];
-    }
-
-    renderBarChart() {
-        if (!this.els.weeklyBarChart) return;
-        this.els.weeklyBarChart.innerHTML = '';
-        const today = parseDateKey(this.todayKey);
-        for (let i = 6; i >= 0; i--) {
-            const date = addDays(today, -i);
-            const dateKey = toDateKey(date);
-            const day = this.getDay(dateKey, false);
-            const progress = this.dayProgress(day);
-            const col = document.createElement('div');
-            col.className = 'bar-col';
-            const bar = document.createElement('div');
-            bar.className = 'bar-fill';
-            bar.style.height = `${progress.pct}%`;
-            if (progress.pct >= 100) bar.classList.add('bar-perfect');
-            else if (progress.pct >= 50) bar.classList.add('bar-good');
-            const pct = document.createElement('span');
-            pct.className = 'bar-pct';
-            pct.textContent = `${progress.pct}%`;
-            const label = document.createElement('span');
-            label.className = 'bar-label';
-            label.textContent = date.toLocaleDateString('en-US', { weekday: 'short' });
-            const count = document.createElement('span');
-            count.className = 'bar-count';
-            count.textContent = `${progress.done}/${progress.total}`;
-            col.append(pct, bar, label, count);
-            col.addEventListener('click', () => this.selectDate(dateKey));
-            this.els.weeklyBarChart.appendChild(col);
-        }
-    }
-
-    renderQuestRanking() {
-        if (!this.els.questRanking) return;
-        const questMap = {};
-        Object.values(this.data).forEach(day => {
-            day.tasks.forEach(task => {
-                const key = task.text.toLowerCase().trim();
-                if (!questMap[key]) questMap[key] = { text: task.text, done: 0, total: 0, priority: task.priority };
-                questMap[key].total++;
-                if (task.done) questMap[key].done++;
-            });
-        });
-        const sorted = Object.values(questMap)
-            .filter(q => q.total >= 1)
-            .sort((a, b) => (b.done / b.total) - (a.done / a.total))
-            .slice(0, 6);
-        if (!sorted.length) {
-            this.els.questRanking.innerHTML = '<p class="rank-empty">Complete quests to see your ranking</p>';
-            return;
-        }
-        this.els.questRanking.innerHTML = '';
-        sorted.forEach((q, i) => {
-            const pct = Math.round((q.done / q.total) * 100);
-            const row = document.createElement('div');
-            row.className = 'rank-row';
-            row.innerHTML = `
-                <span class="rank-num">${i + 1}</span>
-                <div class="rank-info">
-                    <strong>${q.text}</strong>
-                    <div class="rank-bar-track"><div class="rank-bar-fill" style="width:${pct}%"></div></div>
-                </div>
-                <span class="rank-pct">${pct}%</span>
-            `;
-            this.els.questRanking.appendChild(row);
-        });
-    }
-
-    hasCompletedBossQuest() {
-        return Object.values(this.data).some((day) => (
-            day.tasks.some((task) => task.priority === "high" && task.done)
-        ));
+    saveDailyCheckIn() {
+        const day = this.touchDay(this.selectedDate);
+        day.focusLine = this.els.focusLineInput.value.trim();
+        day.motivation = day.focusLine;
+        day.mood = clamp(this.els.moodRange.value, 1, 5, 3);
+        day.energy = clamp(this.els.energyRange.value, 1, 5, 3);
+        day.urge = clamp(this.els.urgeRange.value, 0, 10, 0);
+        day.relapse = this.els.relapseCheck.checked;
+        day.gratitude = this.els.gratitudeInput.value.trim();
+        day.reflection = this.els.reflectionInput.value.trim();
+        this.autoStatus(day);
+        this.persistDay(this.selectedDate);
+        this.renderAll();
     }
 
     addTask() {
-        if (!this.canEditDate(this.selectedDate)) {
-            this.toast("Past days are locked.", "warn");
-            return;
-        }
-
-        const text = this.els.newTaskInput.value.trim();
-        if (!text) {
-            this.toast("Name the quest first.", "warn");
+        const title = this.els.newTaskInput.value.trim();
+        if (!title) {
+            this.toast("Name the task first.", "warn");
             return;
         }
 
         const day = this.touchDay(this.selectedDate);
         day.tasks.push({
             id: uid(),
-            text,
-            priority: this.els.newTaskPriority.value,
+            title,
+            text: title,
             done: false,
+            priority: this.els.newTaskPriority.value,
+            goalId: this.els.newTaskGoal.value,
+            habitId: "",
+            estimateMins: clamp(this.els.newTaskEstimate.value, 5, 480, 25),
             createdAt: new Date().toISOString(),
             completedAt: null
         });
-        if (this.isFutureDate(this.selectedDate)) {
-            day.status = "neutral";
-        }
         this.els.newTaskInput.value = "";
-        this.persistDate(this.selectedDate);
+        this.autoStatus(day);
+        this.persistDay(this.selectedDate);
         this.renderAll();
         this.els.newTaskInput.focus();
-        sfx.play('add');
-        const p = this.els.newTaskPriority.value;
-        const addMsgs = {
-            high: "⚔️ Boss quest accepted! Big XP incoming.",
-            medium: "🎯 Core quest locked in.",
-            low: "✅ Small quest added. Every bit counts!"
-        };
-        this.toast(addMsgs[p] || "Quest added!");
+        this.toast("Task saved.", "success");
     }
 
     toggleTask(taskId, done) {
-        if (!this.canProgressDate(this.selectedDate)) {
-            this.toast("Only today can score progress.", "warn");
-            this.renderPanel();
-            return;
-        }
-
         const day = this.touchDay(this.selectedDate);
         const task = day.tasks.find((item) => item.id === taskId);
-        if (!task) {
-            return;
-        }
-
+        if (!task) return;
         task.done = done;
         task.completedAt = done ? new Date().toISOString() : null;
-
-        if (done) {
-            this.combo += 1;
-            clearTimeout(this.comboTimer);
-            this.comboTimer = setTimeout(() => { this.combo = 0; }, 6000);
-            const xp = this.taskXp(task);
-            this.spawnXpFloat(xp);
-            this.spawnBurst();
-            sfx.play('check');
-            // Variable reward — random bonus XP (slot machine effect)
-            if (Math.random() < 0.15) {
-                const bonus = [10, 15, 20, 25][Math.floor(Math.random() * 4)];
-                this.spawnXpFloat(bonus);
-                sfx.play('combo');
-                this.toast(`✨ BONUS +${bonus} XP! Lucky strike!`, "combo");
-            }
-            if (this.combo >= 3) {
-                sfx.play('combo');
-                this.toast(`🔥 COMBO x${this.combo}! Keep going!`, "combo");
-            }
-        } else {
-            sfx.play('uncheck');
-        }
-
-        const progress = this.dayProgress(day);
-        if (progress.total > 0 && progress.done === progress.total) {
-            day.status = "won";
-            this.flashScreen("win");
-            this.spawnConfetti();
-            sfx.play('win');
-            this.toast("🏆 PERFECT DAY! All quests complete!", "win");
-        } else if (day.status === "won") {
-            day.status = "neutral";
-        }
-
-        this.persistDate(this.selectedDate);
+        this.autoStatus(day);
+        this.persistDay(this.selectedDate);
         this.renderAll();
-        this.checkLevelUp();
+        if (done) {
+            this.toast(`+${XP_BY_PRIORITY[task.priority] || XP_BY_PRIORITY.medium} XP. Proof recorded.`, "success");
+        }
     }
 
     deleteTask(taskId) {
-        if (!this.canEditDate(this.selectedDate)) {
-            this.toast("Past days are locked.", "warn");
-            return;
-        }
-
         const day = this.touchDay(this.selectedDate);
         day.tasks = day.tasks.filter((task) => task.id !== taskId);
-        const progress = this.dayProgress(day);
-        if (progress.total === 0 || progress.done < progress.total) {
-            day.status = day.status === "won" ? "neutral" : day.status;
-        }
-        this.persistDate(this.selectedDate);
+        this.autoStatus(day);
+        this.persistDay(this.selectedDate);
         this.renderAll();
     }
 
-    saveMotivation() {
-        if (!this.canEditDate(this.selectedDate)) {
-            this.renderPanel();
-            return;
-        }
-
-        const day = this.touchDay(this.selectedDate);
-        day.motivation = this.els.motivationInput.value.trim();
-        this.persistDate(this.selectedDate);
-        this.renderGrid();
-    }
-
-    setStatus(status) {
-        if (!this.canProgressDate(this.selectedDate)) {
-            this.toast(this.isFutureDate(this.selectedDate) ? "Future days can be planned, not scored." : "Past days are locked.", "warn");
-            return;
-        }
-
+    setDayStatus(status) {
         const day = this.touchDay(this.selectedDate);
         const progress = this.dayProgress(day);
-
-        if (status === "won" && (progress.total === 0 || progress.done !== progress.total)) {
-            this.toast("Complete every quest before claiming the win.", "warn");
+        if (status === "won" && progress.total > 0 && progress.done < progress.total) {
+            this.toast("Finish every visible item before claiming the win.", "warn");
             return;
         }
-
         day.status = day.status === status ? "neutral" : status;
-        this.persistDate(this.selectedDate);
+        this.persistDay(this.selectedDate);
         this.renderAll();
     }
 
-    persistDate(dateKey) {
-        this.saveLocalData();
+    autoStatus(day) {
+        const progress = this.dayProgress(day);
+        if (day.relapse) {
+            day.status = "missed";
+            return;
+        }
+        if (progress.total > 0 && progress.done === progress.total) {
+            day.status = "won";
+        } else if (day.status === "won") {
+            day.status = "neutral";
+        }
+    }
 
+    startRescuePlan() {
+        const plan = this.workspace.recovery.rescuePlan.length
+            ? this.workspace.recovery.rescuePlan
+            : this.defaultWorkspace().recovery.rescuePlan;
+        const day = this.touchDay(this.todayKey);
+        const title = `Rescue: ${plan[0] || "leave the room for two minutes"}`;
+        day.urge = Math.max(day.urge || 0, 7);
+        day.tasks.unshift({
+            id: uid(),
+            title,
+            text: title,
+            done: false,
+            priority: "high",
+            goalId: "goal-clean-mind",
+            habitId: "",
+            estimateMins: 5,
+            createdAt: new Date().toISOString(),
+            completedAt: null
+        });
+        this.selectedDate = this.todayKey;
+        this.autoStatus(day);
+        this.persistDay(this.todayKey);
+        this.renderAll();
+        this.toast("Rescue task started. Move your body now.", "warn");
+    }
+
+    addGoal() {
+        const title = this.els.goalTitle.value.trim();
+        if (!title) {
+            this.toast("Give the goal a name.", "warn");
+            return;
+        }
+        this.workspace.goals.unshift({
+            id: uid(),
+            title,
+            why: this.els.goalWhy.value.trim(),
+            targetDate: this.els.goalDate.value,
+            status: "active",
+            skill: "",
+            color: "mint",
+            createdAt: new Date().toISOString()
+        });
+        this.els.goalTitle.value = "";
+        this.els.goalWhy.value = "";
+        this.touchWorkspace();
+        this.persistWorkspace();
+        this.renderAll();
+        this.toast("Goal saved.", "success");
+    }
+
+    updateGoal(action, goalId) {
+        if (action === "delete") {
+            this.workspace.goals = this.workspace.goals.filter((goal) => goal.id !== goalId);
+        } else {
+            this.workspace.goals = this.workspace.goals.map((goal) => {
+                if (goal.id !== goalId) return goal;
+                return { ...goal, status: goal.status === "completed" ? "active" : "completed" };
+            });
+        }
+        this.touchWorkspace();
+        this.persistWorkspace();
+        this.renderAll();
+    }
+
+    addHabit() {
+        const title = this.els.habitTitle.value.trim();
+        if (!title) {
+            this.toast("Name the habit first.", "warn");
+            return;
+        }
+        this.workspace.habits.push({
+            id: uid(),
+            title,
+            category: this.els.habitCategory.value,
+            goalId: this.els.habitGoal.value,
+            targetPerWeek: clamp(this.els.habitTarget.value, 1, 7, 5),
+            active: true,
+            createdAt: new Date().toISOString()
+        });
+        this.els.habitTitle.value = "";
+        this.touchWorkspace();
+        this.persistWorkspace();
+        this.renderAll();
+        this.toast("Habit added.", "success");
+    }
+
+    toggleHabit(habitId, dateKey, checked) {
+        const day = this.touchDay(dateKey);
+        day.habitChecks[habitId] = checked;
+        this.autoStatus(day);
+        this.persistDay(dateKey);
+        this.renderAll();
+    }
+
+    saveRecoveryPlan() {
+        this.workspace.recovery = {
+            addictionName: this.els.recoveryAddiction.value.trim() || "porn",
+            why: this.els.recoveryWhy.value.trim(),
+            triggers: uniqueLines(this.els.recoveryTriggers.value, 10),
+            rescuePlan: uniqueLines(this.els.recoveryPlan.value, 10)
+        };
+        this.touchWorkspace();
+        this.persistWorkspace();
+        this.renderAll();
+        this.toast("Recovery plan saved.", "success");
+    }
+
+    addReminder() {
+        const title = this.els.reminderTitle.value.trim();
+        if (!title) {
+            this.toast("Reminder needs a title.", "warn");
+            return;
+        }
+        this.workspace.reminders.push({
+            id: uid(),
+            title,
+            notes: this.els.reminderNotes.value.trim(),
+            date: this.els.reminderDate.value || this.todayKey,
+            time: this.els.reminderTime.value || "09:00",
+            category: this.els.reminderCategory.value,
+            goalId: "",
+            notify: this.els.reminderNotify.checked,
+            done: false,
+            lastNotifiedKey: "",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        });
+        this.els.reminderTitle.value = "";
+        this.els.reminderNotes.value = "";
+        this.touchWorkspace();
+        this.persistWorkspace();
+        this.renderAll();
+        this.toast("Reminder saved.", "success");
+    }
+
+    toggleReminder(reminderId, done) {
+        this.workspace.reminders = this.workspace.reminders.map((reminder) => {
+            if (reminder.id !== reminderId) return reminder;
+            return { ...reminder, done, updatedAt: new Date().toISOString() };
+        });
+        this.touchWorkspace();
+        this.persistWorkspace();
+        this.renderAll();
+    }
+
+    deleteReminder(reminderId) {
+        this.workspace.reminders = this.workspace.reminders.filter((reminder) => reminder.id !== reminderId);
+        this.touchWorkspace();
+        this.persistWorkspace();
+        this.renderAll();
+    }
+
+    saveNotificationSettings() {
+        const current = this.workspace.notificationSettings;
+        this.workspace.notificationSettings = {
+            ...current,
+            enabled: this.els.notifyEnabled.checked,
+            email: this.els.notifyEmail.value.trim(),
+            timezone: this.config.appTimezone || current.timezone || "Asia/Kolkata",
+            morningDigest: this.els.morningDigest.checked,
+            morningTime: this.els.morningTime.value || "07:30",
+            eveningReview: this.els.eveningReview.checked,
+            eveningTime: this.els.eveningTime.value || "21:30",
+            relapseShield: this.els.relapseShield.checked,
+            relapseShieldTime: this.els.relapseShieldTime.value || "22:45"
+        };
+        this.touchWorkspace();
+        this.persistWorkspace();
+        this.renderAll();
+        this.toast("Notification settings saved.", "success");
+    }
+
+    async sendTestNotification() {
+        this.saveNotificationSettings();
+        if (!this.hasCloudApi()) {
+            this.toast("Add apiBaseUrl in config.js before sending email.", "warn");
+            return;
+        }
+        const email = this.workspace.notificationSettings.email;
+        if (!email) {
+            this.toast("Add an email address first.", "warn");
+            return;
+        }
+        this.setSyncState("Sending test...");
+        try {
+            const response = await this.apiFetch("/api/notifications/test", {
+                method: "POST",
+                body: JSON.stringify({ email })
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(payload.error || "Notification test failed");
+            }
+            this.setSyncState("Notification test sent");
+            this.toast("Test email sent.", "success");
+        } catch (error) {
+            this.setSyncState("Notification test failed");
+            this.toast(error.message || "Notification test failed.", "error");
+        }
+    }
+
+    persistDay(dateKey) {
+        this.saveLocal();
         if (!this.hasCloudApi()) {
             this.setSyncState("Saved on this device");
             return;
         }
-
-        clearTimeout(this.syncTimer);
-        this.syncTimer = setTimeout(() => {
-            this.pushDate(dateKey);
-        }, 250);
+        clearTimeout(this.dayTimers.get(dateKey));
+        this.dayTimers.set(dateKey, setTimeout(() => this.pushDay(dateKey), 350));
+        this.setSyncState("Saved locally, syncing...");
     }
 
-    async pushDate(dateKey) {
-        const day = this.getDay(dateKey, false);
-        if (!day || !this.hasCloudApi()) {
+    persistWorkspace() {
+        this.saveLocal();
+        if (!this.hasCloudApi()) {
+            this.setSyncState("Saved on this device");
             return;
         }
+        clearTimeout(this.workspaceTimer);
+        this.workspaceTimer = setTimeout(() => this.pushWorkspace(), 450);
+        this.setSyncState("Saved locally, syncing...");
+    }
 
-        this.setSyncState("Syncing...");
-
+    async pushDay(dateKey) {
+        const day = this.getDay(dateKey, false);
+        if (!day || !this.hasCloudApi()) return;
         try {
             const response = await this.apiFetch(`/api/days/${dateKey}`, {
                 method: "PUT",
                 body: JSON.stringify({ day })
             });
-
+            const payload = await response.json().catch(() => ({}));
             if (!response.ok) {
-                const payload = await response.json().catch(() => ({}));
-                if (response.status === 423 || response.status === 409) {
-                    this.toast(payload.error || "That day cannot be changed.", "warn");
-                    await this.syncFromCloud({ quiet: true });
-                    this.renderAll();
-                    return;
-                }
                 throw new Error(payload.error || `Sync failed (${response.status})`);
             }
-
-            const payload = await response.json();
             if (payload.day) {
-                this.data[dateKey] = this.normalizeDay(dateKey, payload.day);
-                this.saveLocalData();
+                this.days[dateKey] = this.normalizeDay(dateKey, payload.day);
+                this.saveLocal();
             }
             this.setSyncState(`Synced to ${payload.store || "cloud"}`);
         } catch (error) {
             this.setSyncState("Cloud sync paused");
-            this.toast("Saved locally. Cloud sync will retry when the API is ready.", "error");
+            this.toast("Saved locally. Cloud sync will retry when API settings are fixed.", "error");
+        }
+    }
+
+    async pushWorkspace() {
+        if (!this.hasCloudApi()) return;
+        try {
+            const response = await this.apiFetch("/api/workspace", {
+                method: "PUT",
+                body: JSON.stringify({ workspace: this.workspace })
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(payload.error || `Sync failed (${response.status})`);
+            }
+            if (payload.workspace) {
+                this.workspace = this.normalizeWorkspace(payload.workspace);
+                this.saveLocal();
+            }
+            this.setSyncState(`Synced to ${payload.store || "cloud"}`);
+        } catch (error) {
+            this.setSyncState("Cloud sync paused");
+            this.toast("Workspace saved locally. Cloud sync needs API settings.", "error");
         }
     }
 
@@ -1219,69 +1001,72 @@ class DayForgeApp {
             this.setSyncState("Saved on this device");
             return;
         }
-
         if (!quiet) {
             this.setSyncState("Syncing...");
         }
-
         try {
             const response = await this.apiFetch(`/api/snapshot?year=${this.currentYear}`, { method: "GET" });
+            const payload = await response.json().catch(() => ({}));
             if (!response.ok) {
-                const payload = await response.json().catch(() => ({}));
                 throw new Error(payload.error || `Sync failed (${response.status})`);
             }
-            const payload = await response.json();
-            this.data = this.mergeDayMaps(this.data, payload.days || {});
-            this.saveLocalData();
+            this.days = this.mergeDayMaps(this.days, payload.days || {});
+            const incomingWorkspace = this.normalizeWorkspace(payload.workspace || {});
+            if (this.isBlankWorkspace(incomingWorkspace) && !this.isBlankWorkspace(this.workspace)) {
+                await this.pushWorkspace();
+            } else {
+                this.workspace = this.mergeWorkspace(this.workspace, incomingWorkspace);
+            }
+            if (payload.user?.email && !this.workspace.notificationSettings.email) {
+                this.workspace.notificationSettings.email = payload.user.email;
+            }
+            this.saveLocal();
             this.setSyncState(`Synced to ${payload.primaryStore || "cloud"}`);
             if (!quiet) {
-                this.toast("Sync complete.");
+                this.toast("Sync complete.", "success");
             }
             this.renderAll();
         } catch (error) {
             this.setSyncState("Cloud sync unavailable");
             if (!quiet) {
-                this.toast("Cloud sync unavailable. Check Render API settings.", "error");
+                this.toast(error.message || "Cloud sync unavailable.", "error");
             }
         }
     }
 
     async apiFetch(path, options = {}) {
-        const base = this.config.apiBaseUrl.replace(/\/$/, "");
         const headers = {
             "Content-Type": "application/json",
-            "X-Client-Date": this.todayKey,
-            "X-Client-Timezone": this.config.appTimezone || "UTC",
+            "X-Demo-User": this.currentUser.uid,
             ...(options.headers || {})
         };
 
-        if (this.firebaseReady && this.firebaseAuth && this.firebaseAuth.currentUser) {
-            const token = await this.firebaseAuth.currentUser.getIdToken();
-            headers.Authorization = `Bearer ${token}`;
-        } else {
-            headers["X-Demo-User"] = this.currentUser.uid;
+        if (this.firebaseReady && this.firebaseAuth?.currentUser) {
+            try {
+                headers.Authorization = `Bearer ${await this.firebaseAuth.currentUser.getIdToken()}`;
+            } catch {
+                // Dev auth still uses X-Demo-User when Firebase Admin is not configured.
+            }
         }
 
-        return fetch(`${base}${path}`, { ...options, headers });
+        return fetch(`${this.apiBase}${path}`, { ...options, headers });
     }
 
     async handleAuthClick() {
-        if (this.firebaseReady && this.firebaseAuth && this.firebaseAuth.currentUser) {
+        if (this.firebaseReady && this.firebaseAuth?.currentUser) {
             await signOut(this.firebaseAuth);
             this.toast("Signed out.");
             return;
         }
-
         if (!this.firebaseReady || !this.firebaseAuth) {
-            this.toast("Add Firebase config to enable sign in.", "warn");
+            this.toast("Add Firebase browser config to enable sign in.", "warn");
             return;
         }
-
         try {
             const provider = new GoogleAuthProvider();
             await signInWithPopup(this.firebaseAuth, provider);
-            this.toast("Signed in.");
-        } catch (error) {
+            this.toast("Signed in.", "success");
+        } catch {
             this.toast("Sign in was not completed.", "error");
         }
     }
@@ -1290,16 +1075,12 @@ class DayForgeApp {
         const name = this.currentUser.displayName || "Local player";
         this.els.userName.textContent = name;
         this.els.userAvatar.textContent = this.initials(name);
-        const signedIn = this.firebaseReady && this.firebaseAuth && this.firebaseAuth.currentUser;
+        const signedIn = this.firebaseReady && this.firebaseAuth?.currentUser;
         this.els.authButton.textContent = signedIn ? "Sign out" : "Sign in";
     }
 
-    setSyncState(message) {
-        this.els.syncState.textContent = message;
-    }
-
     initials(name) {
-        return name
+        return String(name || "DayForge")
             .split(/\s+/)
             .filter(Boolean)
             .slice(0, 2)
@@ -1307,117 +1088,426 @@ class DayForgeApp {
             .join("") || "DF";
     }
 
+    setSyncState(message) {
+        this.els.syncState.textContent = message;
+    }
+
+    dayProgress(day) {
+        if (!day) return { done: 0, total: 0, pct: 0 };
+        const taskDone = day.tasks.filter((task) => task.done).length;
+        const activeHabitIds = this.workspace.habits.filter((habit) => habit.active).map((habit) => habit.id);
+        const habitDone = activeHabitIds.filter((id) => day.habitChecks[id]).length;
+        const total = day.tasks.length + activeHabitIds.length;
+        const done = taskDone + habitDone;
+        return { done, total, pct: total ? Math.round((done / total) * 100) : 0 };
+    }
+
+    dayXp(day) {
+        if (!day) return 0;
+        const taskXp = day.tasks.reduce((total, task) => total + (task.done ? XP_BY_PRIORITY[task.priority] || XP_BY_PRIORITY.medium : 0), 0);
+        const habitXp = Object.values(day.habitChecks || {}).filter(Boolean).length * 18;
+        const cleanBonus = this.isCleanLoggedDay(day) ? 25 : 0;
+        const winBonus = day.status === "won" ? 45 : 0;
+        return taskXp + habitXp + cleanBonus + winBonus;
+    }
+
+    isCleanLoggedDay(day) {
+        if (!day || day.relapse) return false;
+        const progress = this.dayProgress(day);
+        return progress.done > 0 || Boolean(day.focusLine || day.gratitude || day.reflection);
+    }
+
+    calculateStats() {
+        const allDays = Object.values(this.days);
+        const yearStart = `${this.currentYear}-01-01`;
+        const yearEnd = `${this.currentYear}-12-31`;
+        const yearDays = Object.entries(this.days)
+            .filter(([dateKey]) => dateKey >= yearStart && dateKey <= yearEnd)
+            .map(([, day]) => day);
+        const today = this.getDay(this.todayKey, false);
+        const todayProgress = this.dayProgress(today);
+        const dueToday = this.workspace.reminders.filter((reminder) => reminder.date === this.todayKey && !reminder.done);
+        const doneTasks = allDays.reduce((total, day) => total + day.tasks.filter((task) => task.done).length, 0);
+        const bossTasksDone = allDays.reduce((total, day) => total + day.tasks.filter((task) => task.done && task.priority === "high").length, 0);
+        const habitChecks = allDays.reduce((total, day) => total + Object.values(day.habitChecks || {}).filter(Boolean).length, 0);
+        const totalXp = allDays.reduce((total, day) => total + this.dayXp(day), 0);
+        const level = Math.floor(totalXp / LEVEL_SIZE) + 1;
+        const xpIntoLevel = totalXp % LEVEL_SIZE;
+        const cleanDays = allDays.filter((day) => this.isCleanLoggedDay(day)).length;
+        const wonDays = yearDays.filter((day) => day.status === "won").length;
+        const relapseDays = yearDays.filter((day) => day.relapse).length;
+        const urgeWins = allDays.filter((day) => day.urge >= 7 && !day.relapse && this.isCleanLoggedDay(day)).length;
+        const averageProgress = yearDays.length
+            ? Math.round(yearDays.reduce((total, day) => total + this.dayProgress(day).pct, 0) / yearDays.length)
+            : 0;
+        const streaks = this.calculateStreaks();
+
+        return {
+            totalXp,
+            level,
+            xpIntoLevel,
+            cleanDays,
+            wonDays,
+            relapseDays,
+            doneTasks,
+            bossTasksDone,
+            habitChecks,
+            urgeWins,
+            averageProgress,
+            currentStreak: streaks.current,
+            bestStreak: streaks.best,
+            todayProgress,
+            todayXp: this.dayXp(today),
+            todayUrge: today?.urge || 0,
+            dueToday: dueToday.length
+        };
+    }
+
+    calculateStreaks() {
+        const dateKeys = Object.keys(this.days).sort();
+        let best = 0;
+        let run = 0;
+        let previous = null;
+
+        dateKeys.forEach((dateKey) => {
+            const clean = this.isCleanLoggedDay(this.days[dateKey]);
+            if (!clean) {
+                run = 0;
+                previous = dateKey;
+                return;
+            }
+            if (!previous || toDateKey(addDays(parseDateKey(previous), 1)) === dateKey) {
+                run += 1;
+            } else {
+                run = 1;
+            }
+            best = Math.max(best, run);
+            previous = dateKey;
+        });
+
+        let current = 0;
+        let cursor = parseDateKey(this.todayKey);
+        if (!this.isCleanLoggedDay(this.days[this.todayKey])) {
+            cursor = addDays(cursor, -1);
+        }
+        while (true) {
+            const key = toDateKey(cursor);
+            if (!this.isCleanLoggedDay(this.days[key])) break;
+            current += 1;
+            cursor = addDays(cursor, -1);
+        }
+
+        return { current, best };
+    }
+
+    renderAll() {
+        this.todayKey = toDateKey(new Date());
+        this.updateAuthUi();
+        this.renderHeader();
+        this.renderStats();
+        this.renderDayPanel();
+        this.renderHeatmap();
+        this.renderHabitMatrix();
+        this.renderGoals();
+        this.renderRecovery();
+        this.renderReminders();
+        this.renderNotifications();
+        this.renderAwards();
+    }
+
+    renderHeader() {
+        const quote = QUOTES[Math.floor(Date.now() / 86400000) % QUOTES.length];
+        this.els.todayLabel.textContent = this.selectedDate === this.todayKey ? "Today" : formatHumanDate(this.selectedDate);
+        this.els.headlineText.textContent = this.workspace.profile.mission || "Build proof that you can trust yourself.";
+        this.els.quoteText.textContent = quote[0];
+        this.els.quoteAuthor.textContent = quote[1];
+        this.els.currentDateTitle.textContent = formatHumanDate(this.selectedDate);
+        this.els.currentYearDisplay.textContent = String(this.currentYear);
+        this.els.selectedDateInput.value = this.selectedDate;
+    }
+
+    renderStats() {
+        const stats = this.calculateStats();
+        this.els.levelNumber.textContent = stats.level;
+        this.els.xpLabel.textContent = `${stats.xpIntoLevel} / ${LEVEL_SIZE} XP`;
+        this.els.xpFill.style.width = `${Math.round((stats.xpIntoLevel / LEVEL_SIZE) * 100)}%`;
+        this.els.cleanStreak.textContent = stats.currentStreak;
+        this.els.bestStreak.textContent = stats.bestStreak;
+        this.els.statOverall.textContent = `${stats.averageProgress}%`;
+        this.els.statOverallSub.textContent = `${stats.wonDays} wins, ${stats.cleanDays} clean logs`;
+        this.els.statToday.textContent = `${stats.todayXp} XP`;
+        this.els.statTodaySub.textContent = `${stats.todayProgress.done}/${stats.todayProgress.total} items done`;
+        this.els.statUrge.textContent = `${stats.todayUrge} / 10`;
+        this.els.statUrgeSub.textContent = stats.todayUrge >= 7 ? "Run the rescue plan" : "Calm window";
+        this.els.statReminders.textContent = stats.dueToday;
+        this.els.statRemindersSub.textContent = stats.dueToday ? "Open loops today" : "No reminders due";
+
+        if (stats.level > this.lastLevel) {
+            this.toast(`Level ${stats.level} unlocked. Keep stacking proof.`, "success");
+        }
+        this.lastLevel = stats.level;
+    }
+
+    renderDayPanel() {
+        const day = this.getDay(this.selectedDate, true);
+        const progress = this.dayProgress(day);
+        const xp = this.dayXp(day);
+
+        this.els.focusLineInput.value = day.focusLine;
+        this.els.moodRange.value = day.mood;
+        this.els.energyRange.value = day.energy;
+        this.els.urgeRange.value = day.urge;
+        this.els.relapseCheck.checked = day.relapse;
+        this.els.gratitudeInput.value = day.gratitude;
+        this.els.reflectionInput.value = day.reflection;
+        this.els.progressRing.style.setProperty("--progress", progress.pct);
+        this.els.progressNumber.textContent = `${progress.pct}%`;
+        this.els.progressLabel.textContent = progress.total ? `${progress.done} of ${progress.total} complete` : "No quests yet";
+        this.els.progressXp.textContent = `${xp} XP`;
+        this.els.progressHint.textContent = day.relapse ? "Logged honestly. Restart with one rescue action." : this.progressHint(progress.pct);
+        this.renderGoalOptions();
+        this.renderTaskList(day);
+    }
+
+    progressHint(pct) {
+        if (pct === 100) return "Clean win. Lock in the lesson.";
+        if (pct >= 70) return "Close enough to finish strong.";
+        if (pct >= 30) return "Momentum exists. Add the next rep.";
+        return "A small start beats a perfect plan.";
+    }
+
+    renderGoalOptions() {
+        const options = ['<option value="">No goal</option>']
+            .concat(this.workspace.goals.map((goal) => `<option value="${escapeHtml(goal.id)}">${escapeHtml(goal.title)}</option>`))
+            .join("");
+        const currentTaskGoal = this.els.newTaskGoal.value;
+        const currentHabitGoal = this.els.habitGoal.value;
+        this.els.newTaskGoal.innerHTML = options;
+        this.els.habitGoal.innerHTML = options;
+        this.els.newTaskGoal.value = currentTaskGoal;
+        this.els.habitGoal.value = currentHabitGoal;
+    }
+
+    renderTaskList(day) {
+        if (!day.tasks.length) {
+            this.els.taskList.innerHTML = '<div class="task-empty">Add one task that proves today is not wasted.</div>';
+            return;
+        }
+
+        this.els.taskList.innerHTML = day.tasks.map((task) => {
+            const goal = this.workspace.goals.find((item) => item.id === task.goalId);
+            return `
+                <div class="task-row ${task.done ? "done" : ""}">
+                    <input type="checkbox" data-task-check="${escapeHtml(task.id)}" ${task.done ? "checked" : ""} aria-label="Toggle task">
+                    <div>
+                        <span class="task-title">${escapeHtml(task.title)}</span>
+                        <div class="task-meta">
+                            <span class="pill ${escapeHtml(task.priority)}">${PRIORITY_LABELS[task.priority] || "Core"}</span>
+                            <span class="pill">${task.estimateMins} min</span>
+                            ${goal ? `<span class="pill">${escapeHtml(goal.title)}</span>` : ""}
+                        </div>
+                    </div>
+                    <button class="tiny-button" type="button" data-task-delete="${escapeHtml(task.id)}">Delete</button>
+                </div>
+            `;
+        }).join("");
+    }
+
+    renderHeatmap() {
+        const start = new Date(this.currentYear, 0, 1);
+        const end = new Date(this.currentYear, 11, 31);
+        const buttons = [];
+        for (let date = new Date(start); date <= end; date = addDays(date, 1)) {
+            const dateKey = toDateKey(date);
+            const day = this.getDay(dateKey, false);
+            const progress = this.dayProgress(day);
+            const classes = ["heat-day"];
+            if (dateKey === this.selectedDate) classes.push("selected");
+            if (dateKey === this.todayKey) classes.push("today");
+            if (day?.relapse) classes.push("relapse");
+            else if (day?.status === "won") classes.push("won");
+            else if (day?.status === "missed") classes.push("missed");
+            else if (progress.pct >= 50) classes.push("partial");
+            else if (day && (day.tasks.length || Object.keys(day.habitChecks || {}).length || day.focusLine)) classes.push("planned");
+            buttons.push(`<button class="${classes.join(" ")}" type="button" data-date-key="${dateKey}" title="${formatHumanDate(dateKey)}: ${progress.pct}%"></button>`);
+        }
+        this.els.heatmapGrid.innerHTML = buttons.join("");
+        this.els.heatmapGrid.querySelectorAll("[data-date-key]").forEach((button) => {
+            button.addEventListener("click", () => this.selectDate(button.dataset.dateKey));
+        });
+    }
+
+    renderHabitMatrix() {
+        const habits = this.workspace.habits.filter((habit) => habit.active);
+        if (!habits.length) {
+            this.els.habitMatrix.innerHTML = '<div class="empty-state">Add habits to build your matrix.</div>';
+            return;
+        }
+
+        const end = parseDateKey(this.selectedDate);
+        const dates = Array.from({ length: 21 }, (_, index) => toDateKey(addDays(end, index - 20)));
+        const header = `
+            <div class="habit-row header">
+                <span>Habit</span>
+                ${dates.map((dateKey) => `<span class="habit-cell ${dateKey === this.todayKey ? "today" : ""}">${Number(dateKey.slice(-2))}</span>`).join("")}
+                <span class="habit-score">Score</span>
+            </div>
+        `;
+
+        const rows = habits.map((habit) => {
+            const checkedCount = dates.filter((dateKey) => this.days[dateKey]?.habitChecks?.[habit.id]).length;
+            return `
+                <div class="habit-row">
+                    <span class="habit-name">${escapeHtml(habit.title)}</span>
+                    ${dates.map((dateKey) => {
+                        const checked = this.days[dateKey]?.habitChecks?.[habit.id];
+                        return `
+                            <label class="habit-cell ${dateKey === this.todayKey ? "today" : ""}" title="${escapeHtml(habit.title)} on ${dateKey}">
+                                <input type="checkbox" data-habit-check="${escapeHtml(habit.id)}" data-date-key="${dateKey}" ${checked ? "checked" : ""}>
+                            </label>
+                        `;
+                    }).join("")}
+                    <span class="habit-score">${checkedCount}/21</span>
+                </div>
+            `;
+        }).join("");
+
+        this.els.habitMatrix.innerHTML = `<div class="habit-table">${header}${rows}</div>`;
+    }
+
+    renderGoals() {
+        if (!this.workspace.goals.length) {
+            this.els.goalList.innerHTML = '<div class="empty-state">Add a goal so tasks have a destination.</div>';
+            return;
+        }
+
+        this.els.goalList.innerHTML = this.workspace.goals.map((goal) => {
+            const relatedTasks = Object.values(this.days).flatMap((day) => day.tasks).filter((task) => task.goalId === goal.id);
+            const done = relatedTasks.filter((task) => task.done).length;
+            const pct = relatedTasks.length ? Math.round((done / relatedTasks.length) * 100) : 0;
+            return `
+                <div class="goal-card">
+                    <div class="goal-top">
+                        <strong>${escapeHtml(goal.title)}</strong>
+                        <div>
+                            <button class="tiny-button" type="button" data-goal-action="complete" data-goal-id="${escapeHtml(goal.id)}">${goal.status === "completed" ? "Reopen" : "Done"}</button>
+                            <button class="tiny-button" type="button" data-goal-action="delete" data-goal-id="${escapeHtml(goal.id)}">Delete</button>
+                        </div>
+                    </div>
+                    <p>${escapeHtml(goal.why || "Give this goal a reason that can pull you through low-mood days.")}</p>
+                    <div class="progress-bar"><span style="width:${pct}%"></span></div>
+                    <div class="goal-meta">
+                        <span class="pill">${pct}% task proof</span>
+                        ${goal.targetDate ? `<span class="pill">Target ${escapeHtml(goal.targetDate)}</span>` : ""}
+                        <span class="pill">${escapeHtml(goal.status)}</span>
+                    </div>
+                </div>
+            `;
+        }).join("");
+    }
+
+    renderRecovery() {
+        const recovery = this.workspace.recovery;
+        this.els.recoveryAddiction.value = recovery.addictionName || "porn";
+        this.els.recoveryWhy.value = recovery.why || "";
+        this.els.recoveryTriggers.value = (recovery.triggers || []).join("\n");
+        this.els.recoveryPlan.value = (recovery.rescuePlan || []).join("\n");
+
+        const plan = recovery.rescuePlan?.length ? recovery.rescuePlan : this.defaultWorkspace().recovery.rescuePlan;
+        this.els.panicPlanList.innerHTML = plan.map((step, index) => `
+            <div class="panic-step">
+                <span>${index + 1}</span>
+                <p>${escapeHtml(step)}</p>
+            </div>
+        `).join("");
+    }
+
+    renderReminders() {
+        const sorted = [...this.workspace.reminders].sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+        if (!sorted.length) {
+            this.els.reminderList.innerHTML = '<div class="empty-state">Save contests, meetings, focus blocks, and recovery guardrails here.</div>';
+            return;
+        }
+        this.els.reminderList.innerHTML = sorted.map((reminder) => `
+            <div class="reminder-row ${reminder.done ? "done" : ""}">
+                <input type="checkbox" data-reminder-check="${escapeHtml(reminder.id)}" ${reminder.done ? "checked" : ""} aria-label="Toggle reminder">
+                <div>
+                    <div class="reminder-top">
+                        <strong>${escapeHtml(reminder.title)}</strong>
+                    </div>
+                    <p>${escapeHtml(reminder.notes || "")}</p>
+                    <div class="reminder-meta">
+                        <span class="pill">${escapeHtml(reminder.date)} ${escapeHtml(reminder.time)}</span>
+                        <span class="pill">${escapeHtml(reminder.category)}</span>
+                        <span class="pill">${reminder.notify ? "Notify" : "No email"}</span>
+                    </div>
+                </div>
+                <button class="tiny-button" type="button" data-reminder-delete="${escapeHtml(reminder.id)}">Delete</button>
+            </div>
+        `).join("");
+    }
+
+    renderNotifications() {
+        const settings = this.workspace.notificationSettings;
+        this.els.notifyEmail.value = settings.email || this.currentUser.email || "";
+        this.els.notifyEnabled.checked = Boolean(settings.enabled);
+        this.els.morningDigest.checked = settings.morningDigest !== false;
+        this.els.morningTime.value = settings.morningTime || "07:30";
+        this.els.eveningReview.checked = settings.eveningReview !== false;
+        this.els.eveningTime.value = settings.eveningTime || "21:30";
+        this.els.relapseShield.checked = settings.relapseShield !== false;
+        this.els.relapseShieldTime.value = settings.relapseShieldTime || "22:45";
+    }
+
+    renderAwards() {
+        const stats = this.calculateStats();
+        const unlocked = AWARDS.filter((award) => award.rule(stats));
+        this.els.awardsGrid.innerHTML = AWARDS.map((award) => {
+            const isUnlocked = award.rule(stats);
+            return `
+                <div class="award-card ${isUnlocked ? "unlocked" : ""}">
+                    <div class="award-top">
+                        <span class="award-medal">${escapeHtml(award.code)}</span>
+                        <span class="pill">${isUnlocked ? "Unlocked" : "Locked"}</span>
+                    </div>
+                    <strong>${escapeHtml(award.title)}</strong>
+                    <p>${escapeHtml(award.desc)}</p>
+                    <div class="award-meta">
+                        <span class="pill">${isUnlocked ? "Profile proof" : "Keep building"}</span>
+                    </div>
+                </div>
+            `;
+        }).join("");
+
+        const bestAward = unlocked.at(-1);
+        const text = [
+            "DayForge progress update:",
+            `Clean streak: ${stats.currentStreak} days. Best streak: ${stats.bestStreak} days.`,
+            `Completed tasks: ${stats.doneTasks}. Habit checks: ${stats.habitChecks}. Level: ${stats.level}.`,
+            bestAward ? `Latest badge: ${bestAward.title}.` : "Current badge target: First Clean Day.",
+            "Building focus, recovery, and execution one honest day at a time."
+        ].join("\n");
+        this.els.linkedinText.value = text;
+    }
+
+    async copyLinkedInText() {
+        const text = this.els.linkedinText.value;
+        try {
+            await navigator.clipboard.writeText(text);
+            this.toast("LinkedIn text copied.", "success");
+        } catch {
+            this.els.linkedinText.focus();
+            this.els.linkedinText.select();
+            this.toast("Text selected for copying.", "warn");
+        }
+    }
+
     toast(message, tone = "info") {
         const node = document.createElement("div");
         node.className = `toast ${tone}`;
         node.textContent = message;
-        node.style.animation = 'toastIn 0.4s cubic-bezier(0.22,1,0.36,1) both';
         this.els.toastStack.appendChild(node);
-        setTimeout(() => {
-            node.style.animation = 'toastOut 0.3s ease forwards';
-            setTimeout(() => node.remove(), 300);
-        }, 3600);
-    }
-
-    spawnBurst() {
-        const colors = ['#00e5a0', '#8b5cf6', '#6366f1', '#f59e0b', '#22c55e'];
-        for (let i = 0; i < 8; i++) {
-            const dot = document.createElement('div');
-            dot.className = 'game-particle';
-            const angle = (i / 8) * 360;
-            const dist = 30 + Math.random() * 40;
-            dot.style.cssText = `
-                position:fixed; top:50%; left:50%; width:5px; height:5px;
-                border-radius:50%; pointer-events:none; z-index:9999;
-                background:${colors[i % colors.length]};
-                box-shadow: 0 0 6px ${colors[i % colors.length]};
-                animation: particleFly 0.7s cubic-bezier(0.22,1,0.36,1) forwards;
-                --angle:${angle}deg; --dist:${dist}px;
-            `;
-            document.body.appendChild(dot);
-            setTimeout(() => dot.remove(), 700);
-        }
-    }
-
-    spawnXpFloat(xp) {
-        const el = document.createElement('div');
-        el.className = 'xp-float';
-        el.textContent = `+${xp} XP`;
-        el.style.cssText = `
-            position:fixed; top:45%; left:50%; transform:translateX(-50%);
-            font-family:Inter,sans-serif; font-size:24px; font-weight:900;
-            color:#00e5a0; text-shadow:0 0 16px rgba(0,229,160,0.5);
-            pointer-events:none; z-index:9999;
-            animation: xpFloat 1.2s cubic-bezier(0.22,1,0.36,1) forwards;
-        `;
-        document.body.appendChild(el);
-        setTimeout(() => el.remove(), 1200);
-    }
-
-    flashScreen(type) {
-        const overlay = document.createElement('div');
-        const color = type === 'win' ? 'rgba(0,229,160,0.08)' : 'rgba(239,68,68,0.06)';
-        overlay.style.cssText = `
-            position:fixed; inset:0; z-index:9998; pointer-events:none;
-            background:${color}; animation: screenFlash 0.6s ease forwards;
-        `;
-        document.body.appendChild(overlay);
-        setTimeout(() => overlay.remove(), 600);
-    }
-
-    spawnConfetti() {
-        const colors = ['#00e5a0','#8b5cf6','#f59e0b','#6366f1','#22c55e','#ef4444','#06b6d4'];
-        for (let i = 0; i < 30; i++) {
-            const piece = document.createElement('div');
-            const x = 30 + Math.random() * 40;
-            const delay = Math.random() * 0.4;
-            piece.style.cssText = `
-                position:fixed; top:-10px; left:${x}%; z-index:9999;
-                width:${4 + Math.random()*6}px; height:${4 + Math.random()*6}px;
-                background:${colors[i % colors.length]};
-                border-radius:${Math.random()>0.5?'50%':'2px'};
-                pointer-events:none; opacity:0.9;
-                animation: confettiFall ${1.5+Math.random()}s ease ${delay}s forwards;
-            `;
-            document.body.appendChild(piece);
-            setTimeout(() => piece.remove(), 2500);
-        }
-    }
-
-    checkLevelUp() {
-        const stats = this.calculateStats();
-        if (stats.level > this.lastLevel) {
-            this.lastLevel = stats.level;
-            sfx.play('levelup');
-            this.showLevelUp(stats.level);
-        }
-    }
-
-    showLevelUp(level) {
-        const overlay = document.createElement('div');
-        overlay.style.cssText = `
-            position:fixed; inset:0; z-index:10000;
-            display:grid; place-items:center;
-            background:rgba(5,8,17,0.85); backdrop-filter:blur(20px);
-            animation: fadeIn 0.3s ease;
-        `;
-        overlay.innerHTML = `
-            <div style="text-align:center; animation:levelPop 0.6s cubic-bezier(0.34,1.56,0.64,1) both;">
-                <div style="font-size:64px; margin-bottom:12px; filter:drop-shadow(0 0 20px rgba(0,229,160,0.5));">⚡</div>
-                <h2 style="font-family:Inter,sans-serif; font-size:28px; font-weight:900;
-                    letter-spacing:0.1em; margin:0 0 8px;
-                    background:linear-gradient(135deg,#fff,#00e5a0,#8b5cf6);
-                    -webkit-background-clip:text; -webkit-text-fill-color:transparent;">LEVEL UP!</h2>
-                <p style="color:#7a8599; font-size:18px; font-weight:700; margin:0 0 24px;">Level ${level}</p>
-                <button onclick="this.closest('div').parentElement.remove()" style="
-                    padding:12px 32px; border:1px solid rgba(0,229,160,0.3); border-radius:10px;
-                    background:linear-gradient(135deg,rgba(0,229,160,0.1),rgba(139,92,246,0.1));
-                    color:#fff; font-weight:800; font-size:13px; cursor:pointer;
-                ">CONTINUE</button>
-            </div>
-        `;
-        document.body.appendChild(overlay);
-        setTimeout(() => { if (overlay.parentNode) overlay.remove(); }, 8000);
+        setTimeout(() => node.remove(), 3600);
     }
 }
 

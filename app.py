@@ -1,8 +1,11 @@
+import html
 import json
 import os
 import re
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -28,6 +31,10 @@ DIST = ROOT / "dist"
 PUBLIC = ROOT / "public"
 Base = declarative_base()
 
+PRIORITIES = {"low", "medium", "high"}
+DAY_STATUSES = {"neutral", "won", "missed"}
+REMINDER_CATEGORIES = {"focus", "meeting", "contest", "health", "recovery", "learning", "personal"}
+
 
 def utc_now():
     return datetime.now(timezone.utc)
@@ -38,6 +45,15 @@ class DayEntry(Base):
 
     user_id = Column(String(160), primary_key=True)
     date_key = Column(String(10), primary_key=True)
+    payload = Column(JSON, nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class UserDocument(Base):
+    __tablename__ = "user_documents"
+
+    user_id = Column(String(160), primary_key=True)
+    doc_key = Column(String(60), primary_key=True)
     payload = Column(JSON, nullable=False)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
 
@@ -135,6 +151,74 @@ class StorageHub:
 
         raise RuntimeError("; ".join(errors) or "all stores failed")
 
+    def read_workspace(self, user_id):
+        merged = None
+        stores = []
+
+        for store in self.stores:
+            try:
+                with store.session_factory() as session:
+                    row = session.get(UserDocument, (user_id, "workspace"))
+                    if row:
+                        workspace = normalize_workspace(row.payload)
+                        workspace["updatedAt"] = workspace.get("updatedAt") or row.updated_at.isoformat()
+                        if merged is None or parse_updated_at(workspace) >= parse_updated_at(merged):
+                            merged = workspace
+                stores.append({"name": store.name, "ok": True})
+            except SQLAlchemyError as exc:
+                stores.append({"name": store.name, "ok": False, "error": str(exc.__class__.__name__)})
+
+        return normalize_workspace(merged or {}), stores
+
+    def put_workspace(self, user_id, workspace):
+        errors = []
+        stamped_workspace = normalize_workspace(workspace)
+        stamped_workspace["updatedAt"] = utc_now().isoformat()
+
+        for store in self.stores:
+            try:
+                with store.session_factory.begin() as session:
+                    entry = session.get(UserDocument, (user_id, "workspace"))
+                    if entry is None:
+                        session.add(UserDocument(
+                            user_id=user_id,
+                            doc_key="workspace",
+                            payload=stamped_workspace,
+                            updated_at=utc_now(),
+                        ))
+                    else:
+                        entry.payload = stamped_workspace
+                        entry.updated_at = utc_now()
+                return store.name, stamped_workspace
+            except SQLAlchemyError as exc:
+                errors.append(f"{store.name}: {exc.__class__.__name__}")
+
+        raise RuntimeError("; ".join(errors) or "all stores failed")
+
+    def list_workspaces(self):
+        seen = set()
+        workspaces = []
+
+        for store in self.stores:
+            try:
+                with store.session_factory() as session:
+                    rows = session.execute(
+                        select(UserDocument).where(UserDocument.doc_key == "workspace")
+                    ).scalars().all()
+                    for row in rows:
+                        if row.user_id in seen:
+                            continue
+                        seen.add(row.user_id)
+                        workspace = normalize_workspace(row.payload)
+                        workspace["updatedAt"] = workspace.get("updatedAt") or row.updated_at.isoformat()
+                        workspaces.append({"userId": row.user_id, "workspace": workspace})
+                if workspaces:
+                    return workspaces
+            except SQLAlchemyError as exc:
+                print(f"[storage] list_workspaces failed on {store.name}: {exc}")
+
+        return workspaces
+
     def health(self):
         checks = []
         for store in self.stores:
@@ -147,6 +231,50 @@ class StorageHub:
         return checks
 
 
+class ResendClient:
+    def __init__(self):
+        self.api_key = os.getenv("RESEND_API_KEY", "").strip()
+        self.from_email = os.getenv("RESEND_FROM_EMAIL", "").strip()
+        self.reply_to = os.getenv("RESEND_REPLY_TO", "").strip()
+
+    @property
+    def configured(self):
+        return bool(self.api_key and self.from_email)
+
+    def send_email(self, to_email, subject, html_body):
+        if not self.configured:
+            raise RuntimeError("Resend is not configured. Set RESEND_API_KEY and RESEND_FROM_EMAIL.")
+
+        payload = {
+            "from": self.from_email,
+            "to": [to_email],
+            "subject": subject[:180],
+            "html": html_body,
+        }
+        if self.reply_to:
+            payload["reply_to"] = self.reply_to
+
+        request = urllib.request.Request(
+            "https://api.resend.com/emails",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+
+        try:
+            with urllib.request.urlopen(request, timeout=15) as response:
+                raw = response.read().decode("utf-8")
+                return json.loads(raw) if raw else {"ok": True}
+        except urllib.error.HTTPError as exc:
+            details = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"Resend rejected the email: {details}") from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"Resend request failed: {exc.reason}") from exc
+
+
 def normalize_database_url(url):
     if url.startswith("postgres://"):
         return "postgresql+psycopg://" + url[len("postgres://"):]
@@ -155,41 +283,235 @@ def normalize_database_url(url):
     return url
 
 
-def parse_updated_at(day):
-    value = day.get("updatedAt") or ""
+def parse_updated_at(payload):
+    value = (payload or {}).get("updatedAt") or ""
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
     except ValueError:
         return datetime.fromtimestamp(0, timezone.utc)
 
 
+def clean_text(value, limit=120):
+    return str(value or "").strip()[:limit]
+
+
+def clean_id(value):
+    raw = clean_text(value, 80)
+    if raw:
+        return re.sub(r"[^a-zA-Z0-9:_.-]", "", raw)[:80] or os.urandom(8).hex()
+    return os.urandom(8).hex()
+
+
+def clean_date(value):
+    value = clean_text(value, 10)
+    if re.match(r"^\d{4}-\d{2}-\d{2}$", value or ""):
+        try:
+            datetime.strptime(value, "%Y-%m-%d")
+            return value
+        except ValueError:
+            return ""
+    return ""
+
+
+def clean_time(value, fallback="09:00"):
+    value = clean_text(value, 5)
+    if re.match(r"^\d{2}:\d{2}$", value or ""):
+        hour, minute = value.split(":")
+        if 0 <= int(hour) <= 23 and 0 <= int(minute) <= 59:
+            return value
+    return fallback
+
+
+def clamp_number(value, minimum, maximum, fallback):
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return fallback
+    return max(minimum, min(maximum, number))
+
+
+def safe_list(value, limit=12):
+    if not isinstance(value, list):
+        return []
+    cleaned = []
+    for item in value[:limit]:
+        text_value = clean_text(item, 140)
+        if text_value:
+            cleaned.append(text_value)
+    return cleaned
+
+
+def safe_timezone(name):
+    requested = clean_text(name, 80) or os.getenv("APP_TIMEZONE", "Asia/Kolkata")
+    try:
+        ZoneInfo(requested)
+        return requested
+    except Exception:
+        return "UTC"
+
+
 def normalize_day(date_key, payload):
     payload = payload if isinstance(payload, dict) else {}
-    status = payload.get("status") if payload.get("status") in {"neutral", "won", "missed"} else "neutral"
+    status = payload.get("status") if payload.get("status") in DAY_STATUSES else "neutral"
     tasks = []
 
-    for task in payload.get("tasks", [])[:80]:
+    for task in payload.get("tasks", [])[:100]:
         if not isinstance(task, dict):
             continue
-        text_value = str(task.get("text", "")).strip()[:90]
-        if not text_value:
+        title = clean_text(task.get("title") or task.get("text"), 110)
+        if not title:
             continue
-        priority = task.get("priority") if task.get("priority") in {"low", "medium", "high"} else "medium"
+        priority = task.get("priority") if task.get("priority") in PRIORITIES else "medium"
         tasks.append({
-            "id": str(task.get("id") or os.urandom(8).hex())[:80],
-            "text": text_value,
+            "id": clean_id(task.get("id")),
+            "title": title,
+            "text": title,
             "done": bool(task.get("done")),
             "priority": priority,
-            "createdAt": str(task.get("createdAt") or utc_now().isoformat())[:40],
-            "completedAt": str(task.get("completedAt"))[:40] if task.get("completedAt") else None,
+            "goalId": clean_text(task.get("goalId"), 80),
+            "habitId": clean_text(task.get("habitId"), 80),
+            "estimateMins": clamp_number(task.get("estimateMins"), 5, 480, 25),
+            "createdAt": clean_text(task.get("createdAt") or utc_now().isoformat(), 40),
+            "completedAt": clean_text(task.get("completedAt"), 40) if task.get("completedAt") else None,
         })
+
+    habit_checks = {}
+    if isinstance(payload.get("habitChecks"), dict):
+        for key, value in payload.get("habitChecks", {}).items():
+            habit_id = clean_text(key, 80)
+            if habit_id:
+                habit_checks[habit_id] = bool(value)
+
+    focus_line = clean_text(payload.get("focusLine") or payload.get("motivation"), 180)
 
     return {
         "dateKey": date_key,
         "status": status,
-        "motivation": str(payload.get("motivation", "")).strip()[:120],
+        "focusLine": focus_line,
+        "motivation": focus_line,
+        "mood": clamp_number(payload.get("mood"), 1, 5, 3),
+        "energy": clamp_number(payload.get("energy"), 1, 5, 3),
+        "urge": clamp_number(payload.get("urge"), 0, 10, 0),
+        "relapse": bool(payload.get("relapse")),
+        "gratitude": clean_text(payload.get("gratitude"), 220),
+        "reflection": clean_text(payload.get("reflection"), 700),
+        "habitChecks": habit_checks,
         "tasks": tasks,
-        "updatedAt": str(payload.get("updatedAt") or utc_now().isoformat())[:40],
+        "updatedAt": clean_text(payload.get("updatedAt") or utc_now().isoformat(), 40),
+    }
+
+
+def normalize_goal(goal):
+    title = clean_text(goal.get("title"), 90)
+    if not title:
+        return None
+    status = goal.get("status") if goal.get("status") in {"active", "paused", "completed"} else "active"
+    return {
+        "id": clean_id(goal.get("id")),
+        "title": title,
+        "why": clean_text(goal.get("why"), 220),
+        "targetDate": clean_date(goal.get("targetDate")),
+        "status": status,
+        "skill": clean_text(goal.get("skill"), 80),
+        "color": clean_text(goal.get("color"), 24) or "mint",
+        "createdAt": clean_text(goal.get("createdAt") or utc_now().isoformat(), 40),
+    }
+
+
+def normalize_habit(habit):
+    title = clean_text(habit.get("title"), 90)
+    if not title:
+        return None
+    return {
+        "id": clean_id(habit.get("id")),
+        "title": title,
+        "category": clean_text(habit.get("category"), 40) or "focus",
+        "goalId": clean_text(habit.get("goalId"), 80),
+        "targetPerWeek": clamp_number(habit.get("targetPerWeek"), 1, 7, 5),
+        "active": habit.get("active", True) is not False,
+        "createdAt": clean_text(habit.get("createdAt") or utc_now().isoformat(), 40),
+    }
+
+
+def normalize_reminder(reminder):
+    title = clean_text(reminder.get("title"), 120)
+    if not title:
+        return None
+    category = reminder.get("category") if reminder.get("category") in REMINDER_CATEGORIES else "focus"
+    return {
+        "id": clean_id(reminder.get("id")),
+        "title": title,
+        "notes": clean_text(reminder.get("notes"), 400),
+        "date": clean_date(reminder.get("date")) or today_key(),
+        "time": clean_time(reminder.get("time"), "09:00"),
+        "category": category,
+        "goalId": clean_text(reminder.get("goalId"), 80),
+        "notify": reminder.get("notify", True) is not False,
+        "done": bool(reminder.get("done")),
+        "lastNotifiedKey": clean_text(reminder.get("lastNotifiedKey"), 40),
+        "createdAt": clean_text(reminder.get("createdAt") or utc_now().isoformat(), 40),
+        "updatedAt": clean_text(reminder.get("updatedAt") or utc_now().isoformat(), 40),
+    }
+
+
+def normalize_workspace(payload):
+    payload = payload if isinstance(payload, dict) else {}
+    profile = payload.get("profile") if isinstance(payload.get("profile"), dict) else {}
+    recovery = payload.get("recovery") if isinstance(payload.get("recovery"), dict) else {}
+    settings = payload.get("notificationSettings") if isinstance(payload.get("notificationSettings"), dict) else {}
+
+    goals = []
+    for goal in payload.get("goals", [])[:24]:
+        if isinstance(goal, dict):
+            normalized = normalize_goal(goal)
+            if normalized:
+                goals.append(normalized)
+
+    habits = []
+    for habit in payload.get("habits", [])[:40]:
+        if isinstance(habit, dict):
+            normalized = normalize_habit(habit)
+            if normalized:
+                habits.append(normalized)
+
+    reminders = []
+    for reminder in payload.get("reminders", [])[:180]:
+        if isinstance(reminder, dict):
+            normalized = normalize_reminder(reminder)
+            if normalized:
+                reminders.append(normalized)
+
+    return {
+        "profile": {
+            "displayName": clean_text(profile.get("displayName"), 80),
+            "mission": clean_text(profile.get("mission"), 180),
+            "identity": clean_text(profile.get("identity"), 160) or "I am the kind of person who keeps promises to myself.",
+        },
+        "recovery": {
+            "addictionName": clean_text(recovery.get("addictionName"), 60) or "porn",
+            "why": clean_text(recovery.get("why"), 300),
+            "triggers": safe_list(recovery.get("triggers"), 10),
+            "rescuePlan": safe_list(recovery.get("rescuePlan"), 10),
+        },
+        "goals": goals,
+        "habits": habits,
+        "reminders": reminders,
+        "notificationSettings": {
+            "enabled": bool(settings.get("enabled")),
+            "email": clean_text(settings.get("email"), 180),
+            "timezone": safe_timezone(settings.get("timezone")),
+            "morningDigest": settings.get("morningDigest", True) is not False,
+            "morningTime": clean_time(settings.get("morningTime"), "07:30"),
+            "eveningReview": settings.get("eveningReview", True) is not False,
+            "eveningTime": clean_time(settings.get("eveningTime"), "21:30"),
+            "relapseShield": settings.get("relapseShield", True) is not False,
+            "relapseShieldTime": clean_time(settings.get("relapseShieldTime"), "22:45"),
+            "lastMorningDigestKey": clean_text(settings.get("lastMorningDigestKey"), 20),
+            "lastEveningReviewKey": clean_text(settings.get("lastEveningReviewKey"), 20),
+            "lastRelapseShieldKey": clean_text(settings.get("lastRelapseShieldKey"), 20),
+        },
+        "updatedAt": clean_text(payload.get("updatedAt") or utc_now().isoformat(), 40),
     }
 
 
@@ -212,17 +534,6 @@ def app_timezone():
 
 def today_key():
     return datetime.now(app_timezone()).date().isoformat()
-
-
-def enforce_lock_rules(date_key, day):
-    today = today_key()
-    if date_key < today:
-        raise HTTPException(status_code=423, detail="Past days are locked. Progress cannot be changed.")
-
-    if date_key > today:
-        has_done_tasks = any(task.get("done") for task in day.get("tasks", []))
-        if day.get("status") != "neutral" or has_done_tasks:
-            raise HTTPException(status_code=409, detail="Future days can be planned, not scored.")
 
 
 def init_firebase():
@@ -258,6 +569,45 @@ def configured_origins():
     return origins or ["*"]
 
 
+def notification_html(title, intro, lines):
+    line_html = "".join(f"<li>{html.escape(line)}</li>" for line in lines if line)
+    return f"""
+    <div style="font-family:Inter,Arial,sans-serif;background:#f6f4ee;padding:24px;color:#20242a">
+      <div style="max-width:620px;margin:auto;background:#ffffff;border:1px solid #ded8c9;border-radius:8px;padding:24px">
+        <p style="margin:0 0 8px;color:#4b6f62;font-weight:700">DayForge</p>
+        <h1 style="font-size:24px;line-height:1.25;margin:0 0 12px">{html.escape(title)}</h1>
+        <p style="font-size:15px;line-height:1.6;margin:0 0 16px">{html.escape(intro)}</p>
+        <ul style="padding-left:20px;line-height:1.7;margin:0">{line_html}</ul>
+      </div>
+    </div>
+    """
+
+
+def local_dt_for(settings):
+    timezone_name = settings.get("timezone") or os.getenv("APP_TIMEZONE", "Asia/Kolkata")
+    try:
+        tz = ZoneInfo(timezone_name)
+    except Exception:
+        tz = ZoneInfo("UTC")
+    return utc_now().astimezone(tz)
+
+
+def is_due_time(local_now, hhmm, window_minutes):
+    scheduled = datetime.strptime(f"{local_now.date().isoformat()} {hhmm}", "%Y-%m-%d %H:%M")
+    scheduled = scheduled.replace(tzinfo=local_now.tzinfo)
+    return scheduled <= local_now <= scheduled + timedelta(minutes=window_minutes)
+
+
+def reminder_is_due(local_now, reminder, window_minutes):
+    if reminder.get("done") or not reminder.get("notify"):
+        return False
+    if reminder.get("date") != local_now.date().isoformat():
+        return False
+    scheduled = datetime.strptime(f"{reminder['date']} {reminder['time']}", "%Y-%m-%d %H:%M")
+    scheduled = scheduled.replace(tzinfo=local_now.tzinfo)
+    return scheduled <= local_now <= scheduled + timedelta(minutes=window_minutes)
+
+
 FIREBASE_READY = init_firebase()
 RUNNING_ON_RENDER = os.getenv("RENDER") == "true" or bool(os.getenv("RENDER_SERVICE_ID"))
 HAS_CONFIGURED_DATABASE = bool(
@@ -271,8 +621,9 @@ ALLOW_DEV_AUTH = (
     or (not FIREBASE_READY and not RUNNING_ON_RENDER and not HAS_CONFIGURED_DATABASE)
 )
 storage = StorageHub()
+resend = ResendClient()
 
-app = FastAPI(title="DayForge API", version="1.0.0")
+app = FastAPI(title="DayForge API", version="2.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=configured_origins(),
@@ -312,6 +663,14 @@ async def require_user(
     raise HTTPException(status_code=401, detail="Authentication is not configured.")
 
 
+def require_cron_secret(x_cron_secret: str):
+    configured = os.getenv("NOTIFICATION_CRON_SECRET", "").strip()
+    if configured and x_cron_secret != configured:
+        raise HTTPException(status_code=401, detail="Invalid notification cron secret.")
+    if RUNNING_ON_RENDER and not configured:
+        raise HTTPException(status_code=400, detail="Set NOTIFICATION_CRON_SECRET before enabling scheduled sends.")
+
+
 @app.get("/health")
 async def health():
     checks = storage.health()
@@ -321,6 +680,10 @@ async def health():
         "devAuthAllowed": ALLOW_DEV_AUTH,
         "today": today_key(),
         "stores": checks,
+        "notifications": {
+            "resendConfigured": resend.configured,
+            "cronSecretConfigured": bool(os.getenv("NOTIFICATION_CRON_SECRET", "").strip()),
+        },
     }
 
 
@@ -329,14 +692,18 @@ async def snapshot(year: str = Query(default_factory=lambda: str(datetime.now().
     if not re.match(r"^\d{4}$", year):
         raise HTTPException(status_code=400, detail="Invalid year.")
 
-    days, stores = storage.read_year(user["uid"], year)
-    primary_store = next((store["name"] for store in stores if store.get("ok")), None)
+    days, day_stores = storage.read_year(user["uid"], year)
+    workspace, workspace_stores = storage.read_workspace(user["uid"])
+    primary_store = next((store["name"] for store in day_stores + workspace_stores if store.get("ok")), None)
     return {
         "days": days,
+        "workspace": workspace,
         "primaryStore": primary_store,
-        "stores": stores,
-        "user": {"uid": user["uid"], "email": user.get("email", "")},
+        "stores": day_stores,
+        "workspaceStores": workspace_stores,
+        "user": {"uid": user["uid"], "email": user.get("email", ""), "name": user.get("name", "")},
         "today": today_key(),
+        "notifications": {"resendConfigured": resend.configured},
     }
 
 
@@ -345,17 +712,187 @@ async def put_day(date_key: str, request: Request, user=Depends(require_user)):
     validate_date_key(date_key)
     body = await request.json()
     day = normalize_day(date_key, body.get("day") or {})
-    enforce_lock_rules(date_key, day)
 
     try:
         store_name, saved_day = storage.put_day(user["uid"], date_key, day)
     except RuntimeError as exc:
         return JSONResponse(
             status_code=503,
-            content={"error": "All configured databases rejected the write.", "details": str(exc)},
+            content={"error": "All configured databases rejected the day write.", "details": str(exc)},
         )
 
     return {"day": saved_day, "store": store_name}
+
+
+@app.put("/api/workspace")
+async def put_workspace(request: Request, user=Depends(require_user)):
+    body = await request.json()
+    workspace = normalize_workspace(body.get("workspace") or body)
+
+    try:
+        store_name, saved_workspace = storage.put_workspace(user["uid"], workspace)
+    except RuntimeError as exc:
+        return JSONResponse(
+            status_code=503,
+            content={"error": "All configured databases rejected the workspace write.", "details": str(exc)},
+        )
+
+    return {"workspace": saved_workspace, "store": store_name}
+
+
+@app.post("/api/notifications/test")
+async def send_test_notification(request: Request, user=Depends(require_user)):
+    body = await request.json()
+    workspace, _ = storage.read_workspace(user["uid"])
+    settings = workspace.get("notificationSettings", {})
+    to_email = clean_text(body.get("email") or settings.get("email") or user.get("email"), 180)
+
+    if not to_email:
+        raise HTTPException(status_code=400, detail="Add an email address before sending a test.")
+
+    try:
+        result = resend.send_email(
+            to_email,
+            "DayForge test reminder",
+            notification_html(
+                "Your DayForge notification channel is ready",
+                "This is your reminder system checking in. Use it for meetings, contests, focus blocks, and recovery guardrails.",
+                [
+                    "Plan the next action before motivation fades.",
+                    "Protect your streak with one clean decision at a time.",
+                    "Use the panic plan when urges spike; no shame, just action.",
+                ],
+            ),
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    return {"ok": True, "provider": "resend", "result": result}
+
+
+@app.post("/api/notifications/due")
+async def send_due_notifications(
+    x_cron_secret: str = Header(default=""),
+    window_minutes: int = Query(default=20, ge=1, le=120),
+):
+    require_cron_secret(x_cron_secret)
+
+    sent = 0
+    skipped = 0
+    failures = []
+
+    for item in storage.list_workspaces():
+        user_id = item["userId"]
+        workspace = item["workspace"]
+        settings = workspace.get("notificationSettings", {})
+        email_address = settings.get("email")
+        if not settings.get("enabled") or not email_address:
+            skipped += 1
+            continue
+
+        local_now = local_dt_for(settings)
+        date_key = local_now.date().isoformat()
+        changed = False
+
+        for reminder in workspace.get("reminders", []):
+            notify_key = f"{reminder.get('date')}T{reminder.get('time')}"
+            if reminder.get("lastNotifiedKey") == notify_key:
+                continue
+            if not reminder_is_due(local_now, reminder, window_minutes):
+                continue
+
+            try:
+                resend.send_email(
+                    email_address,
+                    f"Reminder: {reminder['title']}",
+                    notification_html(
+                        reminder["title"],
+                        reminder.get("notes") or "This is the thing future-you asked current-you to remember.",
+                        [
+                            f"Time: {reminder['date']} at {reminder['time']}",
+                            f"Category: {reminder.get('category', 'focus')}",
+                            "Open DayForge and mark the next step done.",
+                        ],
+                    ),
+                )
+                reminder["lastNotifiedKey"] = notify_key
+                sent += 1
+                changed = True
+            except RuntimeError as exc:
+                failures.append({"userId": user_id, "error": str(exc)})
+
+        if settings.get("morningDigest") and settings.get("lastMorningDigestKey") != date_key:
+            if is_due_time(local_now, settings.get("morningTime", "07:30"), window_minutes):
+                due_today = [
+                    reminder["title"]
+                    for reminder in workspace.get("reminders", [])
+                    if reminder.get("date") == date_key and not reminder.get("done")
+                ][:5]
+                try:
+                    resend.send_email(
+                        email_address,
+                        "DayForge morning launch",
+                        notification_html(
+                            "Morning launch",
+                            "Start with clarity, not chaos. Pick one clean win and move.",
+                            due_today or ["Choose the first quest for today.", "Write the trigger you will avoid.", "Protect your attention for the first hour."],
+                        ),
+                    )
+                    settings["lastMorningDigestKey"] = date_key
+                    sent += 1
+                    changed = True
+                except RuntimeError as exc:
+                    failures.append({"userId": user_id, "error": str(exc)})
+
+        if settings.get("eveningReview") and settings.get("lastEveningReviewKey") != date_key:
+            if is_due_time(local_now, settings.get("eveningTime", "21:30"), window_minutes):
+                try:
+                    resend.send_email(
+                        email_address,
+                        "DayForge evening review",
+                        notification_html(
+                            "Evening review",
+                            "Close the loop. Log the truth, take the lesson, and make tomorrow easier.",
+                            [
+                                "Mark completed quests.",
+                                "Record urges honestly without shame.",
+                                "Plan one task for tomorrow.",
+                            ],
+                        ),
+                    )
+                    settings["lastEveningReviewKey"] = date_key
+                    sent += 1
+                    changed = True
+                except RuntimeError as exc:
+                    failures.append({"userId": user_id, "error": str(exc)})
+
+        if settings.get("relapseShield") and settings.get("lastRelapseShieldKey") != date_key:
+            if is_due_time(local_now, settings.get("relapseShieldTime", "22:45"), window_minutes):
+                plan = workspace.get("recovery", {}).get("rescuePlan", [])
+                try:
+                    resend.send_email(
+                        email_address,
+                        "DayForge relapse shield",
+                        notification_html(
+                            "Relapse shield",
+                            "The risky hour is where systems beat willpower. Run the plan now.",
+                            plan or ["Put the phone away from bed.", "Leave the room for two minutes.", "Message an accountability friend or start a focus block."],
+                        ),
+                    )
+                    settings["lastRelapseShieldKey"] = date_key
+                    sent += 1
+                    changed = True
+                except RuntimeError as exc:
+                    failures.append({"userId": user_id, "error": str(exc)})
+
+        if changed:
+            workspace["notificationSettings"] = settings
+            try:
+                storage.put_workspace(user_id, workspace)
+            except RuntimeError as exc:
+                failures.append({"userId": user_id, "error": str(exc)})
+
+    return {"ok": not failures, "sent": sent, "skipped": skipped, "failures": failures[:10]}
 
 
 @app.get("/")
