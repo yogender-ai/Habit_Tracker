@@ -2,75 +2,20 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#fff7f3">
-    <title>Lumina Habit Tracker</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/styles.css">
-    <script type="module" src="/src/main.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#fffaf7">
+  <title>Day Forge Habit Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/config.js"></script>
 </head>
 
 <body>
-    <div id="loadingScreen" class="loading-screen">
-        <div class="loading-diamond">◇</div>
-        <div class="skeleton-line wide"></div>
-        <div class="skeleton-line"></div>
-    </div>
-
-    <div class="lumina-shell" id="appShell">
-        <aside class="sidebar">
-            <div class="brand">
-                <div class="brand-gem">◇</div>
-                <div>
-                    <strong>LUMINA</strong>
-                    <span>Habit Tracker</span>
-                </div>
-            </div>
-
-            <nav class="nav-list" id="navList" aria-label="Lumina pages"></nav>
-
-            <div class="premium-card">
-                <div class="premium-gem">◇</div>
-                <strong>Upgrade to Premium</strong>
-                <p>Unlock unlimited habits, advanced analytics, and coach insights.</p>
-                <button class="btn primary" type="button">Go Premium</button>
-            </div>
-        </aside>
-
-        <main class="main">
-            <header class="topbar">
-                <div>
-                    <h1 id="pageTitle">Good morning, June</h1>
-                    <p id="pageSubtitle">Small actions. Remarkable life.</p>
-                </div>
-
-                <div class="topbar-actions">
-                    <label class="search-box">
-                        <span>⌕</span>
-                        <input id="searchInput" type="search" placeholder="Search habits, goals, notes...">
-                    </label>
-                    <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle theme">☾</button>
-                    <button class="icon-btn" type="button" aria-label="Notifications">◌</button>
-                    <div class="profile-chip">
-                        <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80" alt="June profile">
-                        <div>
-                            <strong>June</strong>
-                            <span>Pro</span>
-                        </div>
-                    </div>
-                </div>
-            </header>
-
-            <section id="pageContent" class="page-content" aria-live="polite"></section>
-        </main>
-    </div>
-
-    <div id="modalRoot"></div>
-    <div id="toastStack" class="toast-stack" aria-live="polite"></div>
-    <div id="confettiLayer" class="confetti-layer" aria-hidden="true"></div>
+  <div id="root"></div>
+  <script type="module" src="/src/main.jsx"></script>
 </body>
 
 </html>
