@@ -2,47 +2,15 @@ import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { initializeApp } from "firebase/app";
 import {
-  getAuth,
-  GoogleAuthProvider,
-  onAuthStateChanged,
-  signInWithPopup,
-  signOut
+  getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut
 } from "firebase/auth";
 
-const ENV = import.meta.env || {};
-const RUNTIME_CONFIG = window.DAYFORGE_CONFIG || {};
-
-function configValue(...values) {
-  for (const value of values) {
-    const text = String(value || "").trim();
-    if (text) return text;
-  }
-  return "";
-}
-
-function compactConfig(values) {
-  return Object.fromEntries(
-    Object.entries(values || {}).filter(([, value]) => String(value || "").trim())
-  );
-}
-
-const ENV_FIREBASE = compactConfig({
-  apiKey: ENV.VITE_FIREBASE_API_KEY,
-  authDomain: ENV.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: ENV.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: ENV.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: ENV.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: ENV.VITE_FIREBASE_APP_ID,
-  measurementId: ENV.VITE_FIREBASE_MEASUREMENT_ID
-});
-
 const CONFIG = {
-  apiBaseUrl: configValue(RUNTIME_CONFIG.apiBaseUrl, ENV.VITE_API_BASE_URL),
-  appTimezone: configValue(RUNTIME_CONFIG.appTimezone, ENV.VITE_APP_TIMEZONE) || "Asia/Kolkata",
-  firebase: {
-    ...ENV_FIREBASE,
-    ...compactConfig(RUNTIME_CONFIG.firebase)
-  }
+  apiBaseUrl: "",
+  appTimezone: "Asia/Kolkata",
+  firebase: {},
+  ...(window.DAYFORGE_CONFIG || {}),
+  firebase: { ...((window.DAYFORGE_CONFIG || {}).firebase || {}) }
 };
 
 const DEFAULT_HABITS = [
@@ -54,90 +22,54 @@ const DEFAULT_HABITS = [
   { id: "water", title: "Drink 8 glasses of water", category: "Health", targetPerWeek: 7, active: true },
   { id: "plan", title: "Plan next day's schedule", category: "Focus", targetPerWeek: 6, active: true },
   { id: "meditate", title: "Meditate for 10 minutes", category: "Mind", targetPerWeek: 7, active: true },
-  { id: "emails", title: "Check emails and updates", category: "Work", targetPerWeek: 5, active: true },
-  { id: "language", title: "Practice language skills", category: "Growth", targetPerWeek: 5, active: true },
-  { id: "flashcards", title: "Review flashcards", category: "Study", targetPerWeek: 7, active: true },
-  { id: "journal", title: "Write in a journal", category: "Mind", targetPerWeek: 5, active: true }
 ];
 
 const QUOTES = [
-  "Focused, intentional, and ready for the month ahead.",
+  "Discipline is the forge. Habits are the hammer. You are the blacksmith.",
   "Small wins today become visible confidence tomorrow.",
   "Keep the promise small enough to do and serious enough to matter.",
-  "Progress loves clarity. Check the box, then move again.",
-  "A warrior is built by repeated promises kept quietly."
+  "A warrior is built by repeated promises kept quietly.",
+  "Forge Discipline. Build Legacy. Stay unstoppable.",
+  "Consistency today. Mastery tomorrow. Keep forging momentum.",
 ];
 
-const WARRIOR_IMAGES = [
-  "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=520&q=80",
-  "https://images.unsplash.com/photo-1549476464-37392f717541?auto=format&fit=crop&w=520&q=80",
-  "https://images.unsplash.com/photo-1574680096145-d05b474e2155?auto=format&fit=crop&w=520&q=80"
+const MISSION_LINES = [
+  "You're forging momentum.", "Stay consistent. Stay unstoppable.",
+  "Every small action compounds.", "Forge your legacy, one habit at a time.",
+  "The grind is the glory.", "Discipline equals freedom.",
 ];
 
-function toDateKey(date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
+const HERO_IMAGES = [
+  "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600&q=80",
+  "https://images.unsplash.com/photo-1549476464-37392f717541?w=600&q=80",
+  "https://images.unsplash.com/photo-1574680096145-d05b474e2155?w=600&q=80",
+  "https://images.unsplash.com/photo-1518611012118-696072aa579a?w=600&q=80",
+  "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=600&q=80",
+  "https://images.unsplash.com/photo-1605296867424-35fc25c9212a?w=600&q=80",
+  "https://images.unsplash.com/photo-1526506118085-60ce8714f8c5?w=600&q=80",
+  "https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?w=600&q=80",
+  "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=600&q=80",
+  "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?w=600&q=80",
+];
 
-function parseDateKey(dateKey) {
-  const [year, month, day] = dateKey.split("-").map(Number);
-  return new Date(year, month - 1, day);
-}
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function toDateKey(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+function monthKey(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; }
+function monthDays(d) { const y=d.getFullYear(),m=d.getMonth(),t=new Date(y,m+1,0).getDate(); return Array.from({length:t},(_,i)=>new Date(y,m,i+1)); }
+function uid() { return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`; }
+function readLocal(u,k) { try{return JSON.parse(localStorage.getItem(`dayforge_${u}_${k}`))||{}}catch{return{}} }
+function writeLocal(u,k,v) { localStorage.setItem(`dayforge_${u}_${k}`,JSON.stringify(v)); }
+function apiBase() { const c=String(CONFIG.apiBaseUrl||"").trim().replace(/\/$/,""); if(c) return c; if(location.hostname==="127.0.0.1"||location.hostname==="localhost") return "http://127.0.0.1:8000"; return location.origin; }
+function hasFirebaseConfig() { const f=CONFIG.firebase||{}; return Boolean(f.apiKey&&f.authDomain&&f.projectId&&f.appId); }
+function normalizeHabit(h) { return { id:String(h.id||uid()), title:String(h.title||"New habit").slice(0,90), category:String(h.category||"Focus").slice(0,40), targetPerWeek:Math.max(1,Math.min(7,Number(h.targetPerWeek||h.target||5))), active:h.active!==false, createdAt:h.createdAt||new Date().toISOString() }; }
 
-function monthKey(date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function monthDays(date) {
-  const year = date.getFullYear();
-  const month = date.getMonth();
-  const total = new Date(year, month + 1, 0).getDate();
-  return Array.from({ length: total }, (_, index) => new Date(year, month, index + 1));
-}
-
-function uid() {
-  return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function readLocal(userId, key) {
-  try {
-    return JSON.parse(localStorage.getItem(`dayforge_${userId}_${key}`)) || {};
-  } catch {
-    return {};
-  }
-}
-
-function writeLocal(userId, key, value) {
-  localStorage.setItem(`dayforge_${userId}_${key}`, JSON.stringify(value));
-}
-
-function apiBase() {
-  const configured = String(CONFIG.apiBaseUrl || "").trim().replace(/\/$/, "");
-  if (configured) return configured;
-  if (location.hostname === "127.0.0.1" || location.hostname === "localhost") return "http://127.0.0.1:8000";
-  return "";
-}
-
-function apiUrl(path) {
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const base = apiBase();
-  return base ? `${base}${normalizedPath}` : normalizedPath;
-}
-
-function hasFirebaseConfig() {
-  const fb = CONFIG.firebase || {};
-  return Boolean(fb.apiKey && fb.authDomain && fb.projectId && fb.appId);
-}
-
-function normalizeHabit(habit) {
-  return {
-    id: String(habit.id || uid()),
-    title: String(habit.title || "New habit").slice(0, 90),
-    category: String(habit.category || "Focus").slice(0, 40),
-    targetPerWeek: Math.max(1, Math.min(7, Number(habit.targetPerWeek || habit.target || 5))),
-    active: habit.active !== false,
-    createdAt: habit.createdAt || new Date().toISOString()
-  };
-}
+function dayStats(checks={}, habits=[]) { const t=habits.length||1, d=habits.filter(h=>checks[h.id]).length; return {done:d,total:t,pct:Math.round((d/t)*100)}; }
+function buildMonthStats(grid,days,habits) { const daily=days.map(d=>dayStats(grid[toDateKey(d)]||{},habits)); const done=daily.reduce((s,i)=>s+i.done,0); const total=daily.reduce((s,i)=>s+i.total,0)||1; return {daily,done,total,pct:Math.round((done/total)*100)}; }
+function buildWeeklyStats(grid,days,habits) { const chunks=[]; for(let i=0;i<days.length;i+=7) chunks.push(days.slice(i,i+7)); return chunks.map((c,i)=>{const s=buildMonthStats(grid,c,habits); const f=c[0],l=c[c.length-1]; return {...s,label:`Week ${i+1}`,range:`${f.toLocaleDateString("en-US",{month:"short",day:"numeric"})} – ${l.toLocaleDateString("en-US",{month:"short",day:"numeric"})}`};}); }
+function habitRows(grid,days,habits) { return habits.map(h=>{const vals=days.map(d=>Boolean(grid[toDateKey(d)]?.[h.id])); const done=vals.filter(Boolean).length; let best=0,run=0; vals.forEach(v=>{run=v?run+1:0;best=Math.max(best,run)}); return {...h,done,total:days.length,pct:Math.round((done/days.length)*100),streak:best};}).sort((a,b)=>b.pct-a.pct||a.title.localeCompare(b.title)); }
+function currentStreak(grid,habits) { const today=new Date(); let streak=0; for(let i=0;i<365;i++){const d=new Date(today);d.setDate(d.getDate()-i); const k=toDateKey(d),c=grid[k]||{}; const done=habits.filter(h=>c[h.id]).length; if(done>0)streak++;else break;} return streak; }
+function longestStreak(grid,habits) { const today=new Date(); let best=0,run=0; for(let i=365;i>=0;i--){const d=new Date(today);d.setDate(d.getDate()-i); const k=toDateKey(d),c=grid[k]||{}; if(habits.filter(h=>c[h.id]).length>0){run++;best=Math.max(best,run)}else{run=0}} return best; }
+function focusScore(grid,days,habits) { if(!habits.length)return 0; const ms=buildMonthStats(grid,days,habits); const cs=Math.min(currentStreak(grid,habits)*3,30); return Math.min(100,Math.round(ms.pct*0.7+cs)); }
 
 function App() {
   const [auth, setAuth] = useState(null);
@@ -151,495 +83,353 @@ function App() {
   const [syncState, setSyncState] = useState("Waiting for sign in");
   const [habitDraft, setHabitDraft] = useState("");
   const [welcomeState, setWelcomeState] = useState("");
+  const [heroImg] = useState(() => pick(HERO_IMAGES));
+  const [quote] = useState(() => pick(QUOTES));
+  const [missionLine] = useState(() => pick(MISSION_LINES));
 
   const days = useMemo(() => monthDays(monthDate), [monthDate]);
   const monthId = monthKey(monthDate);
-  const quote = QUOTES[Math.floor(Date.now() / 86400000) % QUOTES.length];
-  const image = WARRIOR_IMAGES[Math.floor(Date.now() / 86400000) % WARRIOR_IMAGES.length];
-  const activeHabits = habits.filter((habit) => habit.active);
+  const activeHabits = habits.filter(h => h.active);
 
   useEffect(() => {
-    if (!hasFirebaseConfig()) {
-      setAuthReady(true);
-      setSyncState("Firebase web config missing");
-      return;
-    }
-    const firebaseApp = initializeApp(CONFIG.firebase);
-    const nextAuth = getAuth(firebaseApp);
-    setAuth(nextAuth);
-    return onAuthStateChanged(nextAuth, (nextUser) => {
-      setUser(nextUser);
-      setAuthReady(true);
-      setSyncState(nextUser ? "Signed in" : "Sign in required");
-    });
+    if (!hasFirebaseConfig()) { setAuthReady(true); setSyncState("Firebase config missing"); return; }
+    const fa = initializeApp(CONFIG.firebase);
+    const na = getAuth(fa);
+    setAuth(na);
+    return onAuthStateChanged(na, u => { setUser(u); setAuthReady(true); setSyncState(u ? "Signed in" : "Sign in required"); });
   }, []);
 
-  useEffect(() => {
-    document.body.dataset.theme = theme;
-    localStorage.setItem("dayforge_theme", theme);
-  }, [theme]);
+  useEffect(() => { document.body.dataset.theme = theme; localStorage.setItem("dayforge_theme", theme); }, [theme]);
 
-  useEffect(() => {
-    if (!user) return;
-    const cached = readLocal(user.uid, monthId);
-    setGrid(cached);
-    syncFromBackend();
-    sendWelcomeEmail();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, monthId]);
-
-  useEffect(() => {
-    if (!user) return;
-    writeLocal(user.uid, monthId, grid);
-  }, [grid, monthId, user]);
+  useEffect(() => { if (!user) return; setGrid(readLocal(user.uid, monthId)); syncFromBackend(); sendWelcomeEmail(); }, [user, monthId]);
+  useEffect(() => { if (!user) return; writeLocal(user.uid, monthId, grid); }, [grid, monthId, user]);
 
   async function authHeaders() {
-    const headers = { "Content-Type": "application/json", "X-Demo-User": user?.uid || "dayforge-local" };
-    if (auth?.currentUser) headers.Authorization = `Bearer ${await auth.currentUser.getIdToken()}`;
-    return headers;
+    const h = { "Content-Type": "application/json", "X-Demo-User": user?.uid || "dayforge-local" };
+    if (auth?.currentUser) h.Authorization = `Bearer ${await auth.currentUser.getIdToken()}`;
+    return h;
   }
 
   async function syncFromBackend() {
     if (!user) return;
     try {
-      setSyncState("Syncing month...");
-      const response = await fetch(apiUrl(`/api/snapshot?year=${monthDate.getFullYear()}`), {
-        headers: await authHeaders()
-      });
-      if (!response.ok) throw new Error("snapshot failed");
-      const payload = await response.json();
-      const workspaceHabits = (payload.workspace?.habits || []).map(normalizeHabit).filter((habit) => habit.active);
-      setHabits(workspaceHabits.length ? workspaceHabits : DEFAULT_HABITS);
-      const nextGrid = {};
-      days.forEach((date) => {
-        const key = toDateKey(date);
-        nextGrid[key] = payload.days?.[key]?.habitChecks || {};
-      });
-      setGrid((current) => ({ ...nextGrid, ...current }));
-      setSyncState(`Synced to ${payload.primaryStore || "backend"}`);
-    } catch {
-      setSyncState("Backend offline, using local cache");
-    }
+      setSyncState("Syncing...");
+      const r = await fetch(`${apiBase()}/api/snapshot?year=${monthDate.getFullYear()}`, { headers: await authHeaders() });
+      if (!r.ok) throw new Error("snapshot failed");
+      const p = await r.json();
+      const wh = (p.workspace?.habits || []).map(normalizeHabit).filter(h => h.active);
+      setHabits(wh.length ? wh : DEFAULT_HABITS);
+      const ng = {};
+      days.forEach(d => { const k = toDateKey(d); ng[k] = p.days?.[k]?.habitChecks || {}; });
+      setGrid(c => ({ ...ng, ...c }));
+      setSyncState(`Synced → ${p.primaryStore || "backend"}`);
+    } catch { setSyncState("Offline — using local cache"); }
   }
 
-  async function saveWorkspace(nextHabits) {
+  async function saveWorkspace(nh) {
     if (!user) return;
     try {
-      await fetch(apiUrl("/api/workspace"), {
-        method: "PUT",
-        headers: await authHeaders(),
-        body: JSON.stringify({
-          workspace: {
-            profile: {
-              displayName: user.displayName || user.email || "Day Forge Warrior",
-              mission: "Win the month one checked habit at a time."
-            },
-            habits: nextHabits,
-            notificationSettings: {
-              enabled: true,
-              email: user.email || "",
-              timezone: CONFIG.appTimezone || "Asia/Kolkata"
-            }
-          }
-        })
+      await fetch(`${apiBase()}/api/workspace`, {
+        method: "PUT", headers: await authHeaders(),
+        body: JSON.stringify({ workspace: { profile: { displayName: user.displayName || user.email || "Warrior", mission: "Win the month." }, habits: nh, notificationSettings: { enabled: true, email: user.email || "", timezone: CONFIG.appTimezone } } })
       });
       setSyncState("Habits saved");
-    } catch {
-      setSyncState("Habits saved locally");
-    }
+    } catch { setSyncState("Saved locally"); }
   }
 
   async function sendWelcomeEmail() {
     if (!user) return;
-    const key = `dayforge_welcome_${user.uid}`;
-    if (localStorage.getItem(key)) return;
+    const k = `dayforge_welcome_${user.uid}`;
+    if (localStorage.getItem(k)) return;
     try {
-      setWelcomeState("Sending welcome email...");
-      const response = await fetch(apiUrl("/api/notifications/welcome"), {
-        method: "POST",
-        headers: await authHeaders(),
-        body: JSON.stringify({
-          email: user.email,
-          displayName: user.displayName || "Warrior"
-        })
-      });
-      if (!response.ok) throw new Error("welcome failed");
-      localStorage.setItem(key, "sent");
-      setWelcomeState("Welcome email sent");
-    } catch {
-      setWelcomeState("Welcome email pending");
-    }
+      setWelcomeState("Sending welcome...");
+      const r = await fetch(`${apiBase()}/api/notifications/welcome`, { method: "POST", headers: await authHeaders(), body: JSON.stringify({ email: user.email, displayName: user.displayName || "Warrior" }) });
+      if (!r.ok) throw new Error();
+      localStorage.setItem(k, "sent");
+      setWelcomeState("Welcome sent ✓");
+    } catch { setWelcomeState("Welcome pending"); }
   }
 
-  async function pushDay(dateKey, checks) {
+  async function pushDay(dk, checks) {
     if (!user) return;
     try {
-      const done = activeHabits.filter((habit) => checks[habit.id]).length;
+      const done = activeHabits.filter(h => checks[h.id]).length;
       const status = done === activeHabits.length ? "won" : done > 0 ? "neutral" : "missed";
-      await fetch(apiUrl(`/api/days/${dateKey}`), {
-        method: "PUT",
-        headers: await authHeaders(),
-        body: JSON.stringify({
-          day: {
-            dateKey,
-            status,
-            focusLine: quote,
-            habitChecks: checks,
-            tasks: activeHabits.map((habit) => ({
-              id: habit.id,
-              title: habit.title,
-              text: habit.title,
-              done: Boolean(checks[habit.id]),
-              priority: "medium",
-              estimateMins: 20
-            }))
-          }
-        })
+      await fetch(`${apiBase()}/api/days/${dk}`, {
+        method: "PUT", headers: await authHeaders(),
+        body: JSON.stringify({ day: { dateKey: dk, status, focusLine: quote, habitChecks: checks, tasks: activeHabits.map(h => ({ id: h.id, title: h.title, text: h.title, done: Boolean(checks[h.id]), priority: "medium", estimateMins: 20 })) } })
       });
-      setSyncState("Saved to backend");
-    } catch {
-      setSyncState("Saved locally");
-    }
+      setSyncState("Saved ✓");
+    } catch { setSyncState("Saved locally"); }
   }
 
-  function toggleHabit(dateKey, habitId) {
-    setGrid((current) => {
-      const nextChecks = { ...(current[dateKey] || {}), [habitId]: !current[dateKey]?.[habitId] };
-      pushDay(dateKey, nextChecks);
-      return { ...current, [dateKey]: nextChecks };
-    });
+  function toggleHabit(dk, hid) {
+    setGrid(c => { const nc = { ...(c[dk] || {}), [hid]: !c[dk]?.[hid] }; pushDay(dk, nc); return { ...c, [dk]: nc }; });
   }
 
-  function addHabit(event) {
-    event.preventDefault();
-    const title = habitDraft.trim();
-    if (!title) return;
-    const nextHabit = normalizeHabit({ id: uid(), title, category: "Focus", targetPerWeek: 5, active: true });
-    const nextHabits = [...activeHabits, nextHabit];
-    setHabits(nextHabits);
-    setHabitDraft("");
-    saveWorkspace(nextHabits);
+  function addHabit(e) {
+    e.preventDefault();
+    const t = habitDraft.trim(); if (!t) return;
+    const nh = [...activeHabits, normalizeHabit({ id: uid(), title: t, category: "Focus", targetPerWeek: 5, active: true })];
+    setHabits(nh); setHabitDraft(""); saveWorkspace(nh);
   }
 
-  function deleteHabit(habitId) {
-    const nextHabits = habits.map((habit) => habit.id === habitId ? { ...habit, active: false } : habit);
-    setHabits(nextHabits);
-    saveWorkspace(nextHabits);
+  function deleteHabit(hid) {
+    const nh = habits.map(h => h.id === hid ? { ...h, active: false } : h);
+    setHabits(nh); saveWorkspace(nh);
   }
 
-  async function handleAuth() {
-    if (!auth) return;
-    if (auth.currentUser) await signOut(auth);
-    else await signInWithPopup(auth, new GoogleAuthProvider());
-  }
+  async function handleAuth() { if (!auth) return; if (auth.currentUser) await signOut(auth); else await signInWithPopup(auth, new GoogleAuthProvider()); }
 
-  if (!authReady) return <div className="gate-screen"><div className="gate-card">Loading Day Forge...</div></div>;
+  if (!authReady) return <div className="gate-screen"><div className="gate-card" style={{display:'grid',placeItems:'center'}}>Loading DayForge...</div></div>;
 
   if (!user) {
     return (
-      <div className={`gate-screen ${theme}`} style={{position:'relative',zIndex:1}}>
+      <div className="gate-screen">
         <section className="gate-card">
           <div>
             <span className="gate-kicker">Day Forge</span>
-            <h1>Sign in to enter your monthly habit command center.</h1>
-            <p>Your habits, monthly grid, welcome email, and progress sync only after Google sign-in.</p>
+            <h1>Sign in to enter your habit command center.</h1>
+            <p>Track habits, build streaks, forge discipline. Your monthly grid syncs after Google sign-in.</p>
             <button type="button" className="primary-button" onClick={handleAuth}>⚡ Sign in with Google</button>
-            <button type="button" className="theme-button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
-              {theme === "dark" ? "☀️ Light" : "🌙 Dark"}
-            </button>
+            <button type="button" className="theme-button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>{theme === "dark" ? "☀️ Light" : "🌙 Dark"}</button>
             <small>{syncState}</small>
           </div>
-          <img src={image} alt="Warrior training for discipline" />
+          <img src={heroImg} alt="Discipline training" />
         </section>
       </div>
     );
   }
 
-  const monthStats = buildMonthStats(grid, days, activeHabits);
-  const selectedStats = dayStats(grid[selectedDate] || {}, activeHabits);
-  const weeklyStats = buildWeeklyStats(grid, days, activeHabits);
+  const ms = buildMonthStats(grid, days, activeHabits);
+  const ws = buildWeeklyStats(grid, days, activeHabits);
+  const todayKey = toDateKey(new Date());
+  const todayStats = dayStats(grid[todayKey] || {}, activeHabits);
+  const cs = currentStreak(grid, activeHabits);
+  const ls = longestStreak(grid, activeHabits);
+  const fs = focusScore(grid, days, activeHabits);
+  const rows = habitRows(grid, days, activeHabits);
 
   return (
-    <main className={`forge-screen ${theme}`}>
+    <main className="forge-screen">
+      {/* LEFT SIDEBAR */}
       <section className="left-panel">
         <div className="brand-block">
           <h1>{monthDate.toLocaleDateString("en-US", { month: "long" })}</h1>
           <span>Day Forge Tracker</span>
         </div>
-
         <div className="select-row">
-          <label>Month<select value={monthDate.getMonth()} onChange={(e) => setMonthDate(new Date(monthDate.getFullYear(), Number(e.target.value), 1))}>
-            {Array.from({ length: 12 }, (_, i) => <option key={i} value={i}>{new Date(2026, i, 1).toLocaleDateString("en-US", { month: "long" })}</option>)}
+          <label>Month<select value={monthDate.getMonth()} onChange={e => setMonthDate(new Date(monthDate.getFullYear(), Number(e.target.value), 1))}>
+            {Array.from({length:12},(_,i)=><option key={i} value={i}>{new Date(2026,i,1).toLocaleDateString("en-US",{month:"long"})}</option>)}
           </select></label>
-          <label>Year<select value={monthDate.getFullYear()} onChange={(e) => setMonthDate(new Date(Number(e.target.value), monthDate.getMonth(), 1))}>
-            {[2025, 2026, 2027].map((year) => <option key={year}>{year}</option>)}
+          <label>Year<select value={monthDate.getFullYear()} onChange={e => setMonthDate(new Date(Number(e.target.value), monthDate.getMonth(), 1))}>
+            {[2025,2026,2027].map(y=><option key={y}>{y}</option>)}
           </select></label>
         </div>
-
         <figure className="focus-card">
-          <img src={image} alt="Warrior training for discipline" />
-          <figcaption>I am...<br />{quote}</figcaption>
+          <img src={heroImg} alt="Warrior training" />
+          <figcaption>❝ {quote} ❞</figcaption>
         </figure>
-
         <div className="habit-list-card">
-          <h2>Daily Habits</h2>
+          <h2>✦ Daily Habits</h2>
           <ol>
-            {activeHabits.map((habit) => (
-              <li key={habit.id}>
-                <span>{habit.title}</span>
-                <button type="button" onClick={() => deleteHabit(habit.id)} aria-label={`Delete ${habit.title}`}>×</button>
-              </li>
+            {activeHabits.map(h => (
+              <li key={h.id}><span>{h.title}</span><button type="button" onClick={() => deleteHabit(h.id)} aria-label={`Delete ${h.title}`}>×</button></li>
             ))}
           </ol>
         </div>
-
         <form className="add-habit" onSubmit={addHabit}>
-          <input value={habitDraft} onChange={(e) => setHabitDraft(e.target.value)} placeholder="Add a habit" maxLength={80} />
+          <input value={habitDraft} onChange={e => setHabitDraft(e.target.value)} placeholder="Add a habit" maxLength={80} />
           <button type="submit">Add</button>
         </form>
-
         <div className="account-row">
           <button className="auth-button" type="button" onClick={handleAuth}>Sign out</button>
-          <button className="theme-button small" type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
-            {theme === "dark" ? "☀️" : "🌙"}
-          </button>
+          <button className="theme-button small" type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>{theme === "dark" ? "☀️" : "🌙"}</button>
         </div>
         <p className="sync-line">{syncState} · {welcomeState}</p>
       </section>
 
-      <section className="center-panel" style={{ "--days": days.length, "--habits": Math.max(activeHabits.length, 1) }}>
-        <AreaCurve days={days} grid={grid} habits={activeHabits} />
-        <MonthlyBars days={days} grid={grid} habits={activeHabits} />
-        <WeeklyRings weeks={weeklyStats} />
-        <HabitMatrix
-          days={days}
-          habits={activeHabits}
-          grid={grid}
-          selectedDate={selectedDate}
-          onSelect={setSelectedDate}
-          onToggle={toggleHabit}
-        />
+      {/* CENTER PANEL */}
+      <section className="center-panel" style={{"--days": days.length}}>
+        <MissionBanner missionLine={missionLine} pct={ms.pct} todayStats={todayStats} cs={cs} ws={ws} activeHabits={activeHabits} />
+        <ProgressBar pct={ms.pct} done={ms.done} total={ms.total} daysCount={days.length} />
+        <Heatmap days={days} grid={grid} habits={activeHabits} todayKey={todayKey} selectedDate={selectedDate} onSelect={setSelectedDate} onToggle={toggleHabit} monthDate={monthDate} />
+        <WeeklySection weeks={ws} />
       </section>
 
+      {/* RIGHT PANEL */}
       <section className="right-panel">
-        <div className="top-metrics">
-          <MetricCard title="Daily Progress" value={`${selectedStats.pct}%`} />
-          <MetricCard title="Habits" value={`${monthStats.done} / ${monthStats.total}`} ring={monthStats.pct} />
+        <div className="stat-cards">
+          <div className="stat-card"><div className="stat-icon">🔥</div><span className="stat-value">{cs}</span><div className="stat-label">Current Streak</div></div>
+          <div className="stat-card"><div className="stat-icon">✅</div><span className="stat-value">{todayStats.done}</span><div className="stat-label">Done Today</div></div>
+          <div className="stat-card"><div className="stat-icon">📈</div><span className="stat-value">{ms.pct}%</span><div className="stat-label">Completion</div></div>
+          <div className="stat-card"><div className="stat-icon">🎯</div><span className="stat-value">{fs}</span><div className="stat-label">Focus Score</div></div>
         </div>
-        <TopHabits grid={grid} days={days} habits={activeHabits} />
-        <DailyProgress grid={grid} days={days} habits={activeHabits} />
-        <div className="quote-strip">✦ Over 100% on habits, keep going ✦</div>
+        <TopHabitsCard rows={rows} />
+        <DailyProgressCard rows={rows} daysCount={days.length} />
+        <div className="quote-strip">✦ Keep forging. You've got this. ✦</div>
       </section>
     </main>
   );
 }
 
-function dayStats(checks = {}, habits = []) {
-  const total = habits.length || 1;
-  const done = habits.filter((habit) => checks[habit.id]).length;
-  return { done, total, pct: Math.round((done / total) * 100) };
-}
+/* ── SUB-COMPONENTS ────────────────── */
 
-function buildMonthStats(grid, days, habits) {
-  const daily = days.map((date) => dayStats(grid[toDateKey(date)] || {}, habits));
-  const done = daily.reduce((sum, item) => sum + item.done, 0);
-  const total = daily.reduce((sum, item) => sum + item.total, 0) || 1;
-  return { daily, done, total, pct: Math.round((done / total) * 100) };
-}
-
-function buildWeeklyStats(grid, days, habits) {
-  const chunks = [];
-  for (let i = 0; i < days.length; i += 7) chunks.push(days.slice(i, i + 7));
-  return chunks.map((chunk, index) => {
-    const stats = buildMonthStats(grid, chunk, habits);
-    return { ...stats, label: `week ${index + 1}` };
-  });
-}
-
-function habitRows(grid, days, habits) {
-  return habits.map((habit) => {
-    const values = days.map((date) => Boolean(grid[toDateKey(date)]?.[habit.id]));
-    const done = values.filter(Boolean).length;
-    return {
-      ...habit,
-      done,
-      total: days.length,
-      pct: Math.round((done / days.length) * 100),
-      streak: longestRun(values)
-    };
-  }).sort((a, b) => b.pct - a.pct || a.title.localeCompare(b.title));
-}
-
-function longestRun(values) {
-  let best = 0;
-  let run = 0;
-  values.forEach((value) => {
-    run = value ? run + 1 : 0;
-    best = Math.max(best, run);
-  });
-  return best;
-}
-
-function Ring({ value, size = 96 }) {
+function Ring({ value, size = 80 }) {
   return (
     <svg className="ring" width={size} height={size} viewBox="0 0 100 100" style={{ "--value": value }}>
-      <defs>
-        <filter id="ringGlow"><feGaussianBlur stdDeviation="2" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
-      </defs>
       <circle className="ring-bg" cx="50" cy="50" r="39" />
-      <circle className="ring-fg" cx="50" cy="50" r="39" filter="url(#ringGlow)" />
+      <circle className="ring-fg" cx="50" cy="50" r="39" />
       <text x="50" y="55" textAnchor="middle">{value}%</text>
     </svg>
   );
 }
 
-function AreaCurve({ days, grid, habits }) {
-  const stats = days.map((date) => dayStats(grid[toDateKey(date)] || {}, habits));
-  const points = stats.map((day, index) => {
-    const x = stats.length === 1 ? 0 : (index / (stats.length - 1)) * 100;
-    const y = 86 - day.pct * 0.72;
-    return `${x},${y}`;
-  }).join(" ");
+function MissionBanner({ missionLine, pct, todayStats, cs, ws, activeHabits }) {
   return (
-    <div className="area-card">
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="areaFill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#818cf8" stopOpacity="0.4" />
-            <stop offset="50%" stopColor="#34d399" stopOpacity="0.15" />
-            <stop offset="100%" stopColor="#818cf8" stopOpacity="0.02" />
-          </linearGradient>
-          <linearGradient id="lineGrad" x1="0" x2="1" y1="0" y2="0">
-            <stop offset="0%" stopColor="#818cf8" />
-            <stop offset="50%" stopColor="#34d399" />
-            <stop offset="100%" stopColor="#22d3ee" />
-          </linearGradient>
-          <filter id="areaGlow"><feGaussianBlur stdDeviation="1.5" /></filter>
-        </defs>
-        <polygon points={`0,100 ${points} 100,100`} fill="url(#areaFill)" />
-        <polyline points={points} fill="none" stroke="url(#lineGrad)" strokeWidth="1.6" filter="url(#areaGlow)" />
-        <polyline points={points} fill="none" stroke="url(#lineGrad)" strokeWidth="1.2" />
-      </svg>
-    </div>
-  );
-}
-
-function MonthlyBars({ days, grid, habits }) {
-  return (
-    <div className="bar-card" style={{ "--days": days.length }}>
-      {days.map((date, index) => {
-        const key = toDateKey(date);
-        const pct = dayStats(grid[key] || {}, habits).pct;
-        return (
-          <button key={key} type="button" className="bar-col" onClick={() => {}}>
-            <span className="week-label">{index % 7 === 0 ? `week ${Math.floor(index / 7) + 1}` : ""}</span>
-            <i style={{ height: `${Math.max(pct, 2)}%` }} className={index >= 7 && index < 14 ? "pink" : ""} />
-            <b>{pct}%</b>
-            <em>{date.getDate()}</em>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function WeeklyRings({ weeks }) {
-  return (
-    <div className="ring-row">
-      {weeks.map((week) => (
-        <div className="week-ring" key={week.label}>
-          <Ring value={week.pct} size={88} />
-          <span>{week.label}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function HabitMatrix({ days, habits, grid, selectedDate, onSelect, onToggle }) {
-  return (
-    <div className="matrix-card" style={{ "--days": days.length, "--habits": Math.max(habits.length, 1) }}>
-      <div className="matrix-header">
-        <span></span>
-        {days.map((date) => {
-          const key = toDateKey(date);
-          return <button key={key} type="button" className={selectedDate === key ? "selected-day" : ""} onClick={() => onSelect(key)}>{date.toLocaleDateString("en-US", { weekday: "short" }).slice(0, 1)}</button>;
-        })}
+    <div className="mission-banner">
+      <div>
+        <div className="mission-kicker">Today's Mission</div>
+        <h2>{missionLine}</h2>
+        <p>Stay consistent. Every checked habit compounds into something extraordinary.</p>
       </div>
-      <div className="matrix-days">
-        <span></span>
-        {days.map((date) => {
-          const key = toDateKey(date);
-          return <button key={key} type="button" className={selectedDate === key ? "selected-day" : ""} onClick={() => onSelect(key)}>{date.getDate()}</button>;
-        })}
-      </div>
-      {habits.map((habit) => (
-        <div className="matrix-row" key={habit.id}>
-          <span>{habit.title}</span>
-          {days.map((date) => {
-            const key = toDateKey(date);
-            const checked = Boolean(grid[key]?.[habit.id]);
-            return (
-              <button
-                className={`${checked ? "checked" : ""} ${selectedDate === key ? "selected-col" : ""}`}
-                key={key}
-                type="button"
-                aria-label={`${habit.title} ${key}`}
-                onClick={() => onToggle(key, habit.id)}
-              />
-            );
-          })}
-        </div>
-      ))}
+      <div className="mission-ring"><Ring value={pct} size={90} /></div>
     </div>
   );
 }
 
-function MetricCard({ title, value, ring }) {
+function ProgressBar({ pct, done, total, daysCount }) {
   return (
-    <article className="metric-card">
-      <h3>{title}</h3>
-      {typeof ring === "number" ? <Ring value={ring} size={92} /> : <strong>{value}</strong>}
-      {typeof ring === "number" ? <span>{value}</span> : null}
-    </article>
+    <div className="progress-banner">
+      <div className="progress-banner-label"> Monthly Progress</div>
+      <div className="progress-track"><div className="progress-fill" style={{ width: `${pct}%` }} /></div>
+      <div className="progress-meta">
+        <span><strong>{done}</strong> of {total} completed</span>
+        <span><strong>{pct}%</strong></span>
+      </div>
+    </div>
   );
 }
 
-function TopHabits({ grid, days, habits }) {
-  const rows = habitRows(grid, days, habits).slice(0, 10);
+function Heatmap({ days, grid, habits, todayKey, selectedDate, onSelect, onToggle, monthDate }) {
+  const weekdays = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+
+  function cellLevel(d) {
+    const k = toDateKey(d), c = grid[k] || {};
+    const done = habits.filter(h => c[h.id]).length;
+    if (!habits.length || done === 0) return 0;
+    const r = done / habits.length;
+    if (r <= 0.25) return 1; if (r <= 0.5) return 2; if (r <= 0.75) return 3; if (r < 1) return 4; return 5;
+  }
+
+  // Build a 7-row × N-col grid where each day goes into its weekday row
+  const firstDow = (days[0].getDay() + 6) % 7; // 0=Mon
+  const totalCols = days.length;
+
   return (
-    <article className="table-card top-habits">
-      <h3>Top 10 Habits</h3>
-      <table>
-        <thead><tr><th>#</th><th>daily habit</th><th>progress</th></tr></thead>
-        <tbody>
-          {rows.map((row, index) => <tr key={row.id}><td>{index + 1}</td><td>{row.title}</td><td>{row.pct}%</td></tr>)}
-        </tbody>
-      </table>
-    </article>
+    <div className="heatmap-card" style={{"--days": totalCols}}>
+      <div className="heatmap-title">🗓 {monthDate.toLocaleDateString("en-US",{month:"long",year:"numeric"})} · Consistency Heatmap</div>
+      <div className="heatmap-grid">
+        {/* Column headers: day numbers */}
+        <div className="day-label"></div>
+        {days.map(d => {
+          const k = toDateKey(d);
+          return <div key={k} className={`col-header ${k === todayKey ? "today-col" : ""}`}>{d.getDate()}</div>;
+        })}
+
+        {/* Weekday rows */}
+        {weekdays.map((wd, wi) => (
+          <React.Fragment key={wd}>
+            <div className="day-label">{wd}</div>
+            {days.map(d => {
+              const dow = (d.getDay() + 6) % 7;
+              const k = toDateKey(d);
+              if (dow !== wi) return <div key={k} className="heatmap-cell lv0" style={{opacity:0,pointerEvents:'none'}} />;
+              const lv = cellLevel(d);
+              const st = dayStats(grid[k]||{}, habits);
+              return (
+                <button key={k}
+                  className={`heatmap-cell lv${lv} ${k === todayKey ? "today" : ""} ${k === selectedDate ? "selected" : ""}`}
+                  onClick={() => onSelect(k)}
+                  title={`${k}: ${st.done}/${st.total}`}
+                />
+              );
+            })}
+          </React.Fragment>
+        ))}
+      </div>
+      <div className="heatmap-legend">
+        <span><i className="heatmap-cell lv0" style={{display:'inline-block'}} /> 0%</span>
+        <span><i className="heatmap-cell lv1" style={{display:'inline-block'}} /> 1-25%</span>
+        <span><i className="heatmap-cell lv2" style={{display:'inline-block'}} /> 26-50%</span>
+        <span><i className="heatmap-cell lv3" style={{display:'inline-block'}} /> 51-75%</span>
+        <span><i className="heatmap-cell lv4" style={{display:'inline-block'}} /> 76-99%</span>
+        <span><i className="heatmap-cell lv5" style={{display:'inline-block'}} /> 100%</span>
+      </div>
+    </div>
   );
 }
 
-function DailyProgress({ grid, days, habits }) {
-  const rows = habitRows(grid, days, habits);
+/* monthDate passed via closure in App */
+
+function WeeklySection({ weeks }) {
   return (
-    <article className="table-card progress-table">
-      <h3>Daily Progress</h3>
-      <p>{rows.reduce((sum, row) => sum + row.done, 0)} / {rows.length * days.length} completed</p>
-      <table>
-        <thead><tr><th>goal</th><th>percentage</th><th>count</th><th>streak</th></tr></thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.id}>
-              <td>{row.targetPerWeek}</td>
-              <td><span className="mini-bar"><i style={{ width: `${row.pct}%` }} /></span>{row.pct}%</td>
-              <td>{row.done} / {days.length}</td>
-              <td>{row.streak}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </article>
+    <div className="weekly-card">
+      <div className="weekly-title">📊 Weekly Progress</div>
+      <div className="ring-row">
+        {weeks.map(w => (
+          <div className="week-ring" key={w.label}>
+            <Ring value={w.pct} size={72} />
+            <span>{w.label}</span>
+            <span className="week-meta">{w.range}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TopHabitsCard({ rows }) {
+  const top = rows.slice(0, 5);
+  return (
+    <div className="top-habits-card">
+      <div className="card-header"><h3>Top Habits</h3><span className="view-all">View All</span></div>
+      <div className="top-habits-list">
+        {top.map((r, i) => (
+          <div className="top-habit-row" key={r.id}>
+            <div className="rank">{i + 1}</div>
+            <div>
+              <div className="top-habit-name">{r.title}</div>
+              <div className="top-habit-bar"><div className="top-habit-fill" style={{ width: `${r.pct}%` }} /></div>
+            </div>
+            <div className="top-habit-pct">{r.pct}%</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DailyProgressCard({ rows, daysCount }) {
+  return (
+    <div className="daily-progress-card">
+      <div className="card-header"><h3>Daily Metrics</h3></div>
+      <div className="daily-progress-list">
+        <table className="dp-table">
+          <thead><tr><th>Habit</th><th>Goal</th><th>Progress</th><th>Streak</th></tr></thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.id}>
+                <td>{r.title}</td>
+                <td>{r.targetPerWeek}/wk</td>
+                <td><span className="mini-bar"><i style={{width:`${r.pct}%`}} /></span> {r.pct}%</td>
+                <td className="streak">🔥 {r.streak}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
