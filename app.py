@@ -260,6 +260,7 @@ class ResendClient:
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
+                "User-Agent": "DayForge/2.0",
             },
             method="POST",
         )

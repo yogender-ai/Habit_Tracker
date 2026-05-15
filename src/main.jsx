@@ -414,6 +414,8 @@ function ProgressBar({ pct, done, total, daysCount }) {
 
 function Heatmap({ days, grid, habits, todayKey, selectedDate, onSelect, onToggle, monthDate }) {
   const weekdays = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  const selectedChecks = grid[selectedDate] || {};
+  const selectedStats = dayStats(selectedChecks, habits);
 
   function cellLevel(d) {
     const k = toDateKey(d), c = grid[k] || {};
@@ -466,6 +468,23 @@ function Heatmap({ days, grid, habits, todayKey, selectedDate, onSelect, onToggl
         <span><i className="heatmap-cell lv3" style={{display:'inline-block'}} /> 51-75%</span>
         <span><i className="heatmap-cell lv4" style={{display:'inline-block'}} /> 76-99%</span>
         <span><i className="heatmap-cell lv5" style={{display:'inline-block'}} /> 100%</span>
+      </div>
+      <div className="selected-day-panel">
+        <div className="selected-day-head">
+          <span>{selectedDate}</span>
+          <strong>{selectedStats.done}/{selectedStats.total} done</strong>
+        </div>
+        <div className="selected-day-checks">
+          {habits.map(h => {
+            const checked = Boolean(selectedChecks[h.id]);
+            return (
+              <label className={`selected-day-check ${checked ? "done" : ""}`} key={h.id}>
+                <input type="checkbox" checked={checked} onChange={() => onToggle(selectedDate, h.id)} />
+                <span>{h.title}</span>
+              </label>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
