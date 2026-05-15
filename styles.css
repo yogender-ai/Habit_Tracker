@@ -453,7 +453,7 @@ input:focus,select:focus{border-color:var(--purple)}
 .sync-line{min-height:18px;color:var(--dim);font-size:8px;font-weight:700;text-align:center;flex-shrink:0}
 
 /* ── CENTER PANEL ──────────────────────── */
-.center-panel{display:flex;flex-direction:column;gap:10px;min-width:0;min-height:0;overflow-y:auto;overflow-x:hidden}
+.center-panel{display:flex;flex-direction:column;gap:10px;min-width:0;min-height:0;overflow:hidden}
 
 /* Mission Banner */
 .mission-banner{

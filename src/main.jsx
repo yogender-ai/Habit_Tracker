@@ -1568,8 +1568,8 @@ function Heatmap({ days, grid, habits, todayKey, selectedDate, onSelect, onToggl
       </div>
       <div className="heatmap-legend">
         <span><i className="heatmap-cell habit-done" style={{display:'inline-block'}} /> Done</span>
-        <span><i className="heatmap-cell habit-miss" style={{display:'inline-block'}} /> Not done</span>
-        <span style={{marginLeft:'auto',color:'var(--muted)'}}>Bottom = overall</span>
+        <span><i className="heatmap-cell habit-miss" style={{display:'inline-block'}} /> Missed</span>
+        <span style={{marginLeft:'auto',color:'var(--muted)'}}>Bottom row = day score</span>
       </div>
       <div className="selected-day-panel">
         <div className="selected-day-head">
@@ -1577,7 +1577,7 @@ function Heatmap({ days, grid, habits, todayKey, selectedDate, onSelect, onToggl
             <span>{selectedDate}</span>
             <em>{lockLabel}</em>
           </div>
-          <strong>{selectedStats.done}/{selectedStats.total} habits - {doneExtras}/{extras.length} extras</strong>
+          <strong>{selectedStats.done}/{selectedStats.total} habits</strong>
         </div>
         <div className="selected-day-checks">
           {selectedHabits.map(h => {
