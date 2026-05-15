@@ -278,6 +278,41 @@ function hasWorkspaceData(workspace = {}) {
     privacyIsEnabled(workspace.privacySettings || {})
   );
 }
+function hasPrimaryWorkspaceData(workspace = {}) {
+  return Boolean(
+    (workspace.habits || []).length ||
+    (workspace.reminders || []).length ||
+    (workspace.temptations || []).length
+  );
+}
+function mergeWorkspaceWithoutLosingRemote(remoteWorkspace = {}, pendingWorkspace = {}) {
+  const remoteHasPrimary = hasPrimaryWorkspaceData(remoteWorkspace);
+  const pendingHasPrimary = hasPrimaryWorkspaceData(pendingWorkspace);
+  if (!remoteHasPrimary || pendingHasPrimary) return pendingWorkspace;
+
+  const pendingProfile = pendingWorkspace.profile || {};
+  const pendingSettings = pendingWorkspace.notificationSettings || {};
+  const pendingPrivacy = pendingWorkspace.privacySettings || {};
+  const pendingPreferences = pendingWorkspace.preferences || {};
+  const nextPrivacy = newestPrivacySettings(remoteWorkspace.privacySettings || {}, pendingPrivacy);
+
+  return {
+    ...remoteWorkspace,
+    profile: {
+      ...(remoteWorkspace.profile || {}),
+      ...(pendingProfile.displayName ? pendingProfile : {}),
+    },
+    notificationSettings: {
+      ...(remoteWorkspace.notificationSettings || {}),
+      ...(pendingSettings.email ? pendingSettings : {}),
+    },
+    privacySettings: nextPrivacy,
+    preferences: {
+      ...(remoteWorkspace.preferences || {}),
+      ...pendingPreferences,
+    },
+  };
+}
 function shouldApplyWorkspaceResponse(userId, queuedAt, workspace) {
   const pending = readPendingSync(userId).workspace;
   if (pending && pending.queuedAt !== queuedAt) return false;
@@ -388,6 +423,7 @@ function App() {
   const [grid, setGrid] = useState({});
   const [theme, setTheme] = useState(localStorage.getItem("dayforge_theme") || "dark");
   const [syncState, setSyncState] = useState("Waiting for sign in");
+  const [workspaceReady, setWorkspaceReady] = useState(false);
   const [habitDraft, setHabitDraft] = useState("");
   const [welcomeState, setWelcomeState] = useState("");
   const [profile, setProfile] = useState({});
@@ -428,6 +464,7 @@ function App() {
       setSyncState(u ? "Signed in" : "Sign in required");
       if (!u) {
         authHeaderCache.current = {};
+        setWorkspaceReady(false);
         return;
       }
       authHeaderCache.current = { "Content-Type": "application/json", "X-Demo-User": u.uid };
@@ -439,7 +476,7 @@ function App() {
 
   useEffect(() => { document.body.dataset.theme = theme; localStorage.setItem("dayforge_theme", theme); }, [theme]);
   useEffect(() => {
-    if (!user) return;
+    if (!user || !workspaceReady) return;
     const storedTheme = normalizePreferences(readLocalWorkspace(user.uid).preferences || {}).theme;
     if (storedTheme === theme) return;
     const timer = window.setTimeout(() => {
@@ -449,16 +486,18 @@ function App() {
       );
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [theme, user]);
+  }, [theme, user, workspaceReady]);
 
   useEffect(() => {
     if (!user) {
       setPrivacyReady(false);
+      setWorkspaceReady(false);
       setPrivacyUnlocked(true);
       setPrivacyUnlockPin("");
       return;
     }
     const localWorkspace = readLocalWorkspace(user.uid);
+    const pendingWorkspace = readPendingSync(user.uid).workspace?.workspace || {};
     const localProfile = localWorkspace.profile || {};
     const nextProfile = { ...localProfile, displayName: localProfile.displayName || defaultDisplayName(user) };
     const localSettings = localWorkspace.notificationSettings || {};
@@ -467,6 +506,7 @@ function App() {
     const localPreferences = normalizePreferences(localWorkspace.preferences || {});
     const localPrivacy = newestPrivacySettings(localWorkspace.privacySettings || {}, readPrivacySettings(user.uid));
     const privacyEnabled = privacyIsEnabled(localPrivacy);
+    setWorkspaceReady(hasPrimaryWorkspaceData(localWorkspace) || hasPrimaryWorkspaceData(pendingWorkspace));
     setPrivacySettings(localPrivacy);
     setPrivacyUnlocked(!privacyEnabled);
     setPrivacyMessage(privacyEnabled ? "PIN required" : "Privacy lock off");
@@ -637,13 +677,15 @@ function App() {
       .filter(Boolean);
   }
 
-  async function flushPendingSync() {
+  async function flushPendingSync(options = {}) {
     if (!user) return true;
+    const flushWorkspace = options.workspace !== false;
+    const flushDays = options.days !== false;
     const pending = readPendingSync(user.uid);
     let synced = 0;
     let failed = 0;
 
-    if (pending.workspace) {
+    if (flushWorkspace && pending.workspace) {
       try {
         const r = await putJson("/api/workspace", { workspace: pending.workspace.workspace });
         if (!r.ok) throw new Error(await apiMessage(r, `Workspace save failed (${r.status})`));
@@ -659,14 +701,16 @@ function App() {
       }
     }
 
-    const dayEntries = Object.entries(readPendingSync(user.uid).days);
-    for (const [dateKey, item] of dayEntries) {
-      try {
-        const r = await putJson(`/api/days/${dateKey}`, { day: item.day });
-        if (!r.ok) throw new Error(await apiMessage(r, `Day save failed (${r.status})`));
-        if (clearPendingDay(user.uid, dateKey, item.queuedAt)) synced += 1;
-      } catch {
-        failed += 1;
+    if (flushDays) {
+      const dayEntries = Object.entries(readPendingSync(user.uid).days);
+      for (const [dateKey, item] of dayEntries) {
+        try {
+          const r = await putJson(`/api/days/${dateKey}`, { day: item.day });
+          if (!r.ok) throw new Error(await apiMessage(r, `Day save failed (${r.status})`));
+          if (clearPendingDay(user.uid, dateKey, item.queuedAt)) synced += 1;
+        } catch {
+          failed += 1;
+        }
       }
     }
 
@@ -678,7 +722,7 @@ function App() {
     if (!user) return;
     try {
       setSyncState("Syncing...");
-      await flushPendingSync();
+      await flushPendingSync({ workspace: false });
       const r = await fetch(`${apiBase()}/api/snapshot?year=${monthDate.getFullYear()}`, { headers: await authHeaders() });
       if (!r.ok) throw new Error(await apiMessage(r, `Snapshot failed (${r.status})`));
       const p = await r.json();
@@ -688,7 +732,21 @@ function App() {
       let workspaceForMonth = pending.workspace?.workspace || remoteWorkspace;
 
       if (pending.workspace) {
-        applyWorkspacePayload(pending.workspace.workspace);
+        const workspaceToSync = mergeWorkspaceWithoutLosingRemote(remoteWorkspace, pending.workspace.workspace);
+        const queue = readPendingSync(user.uid);
+        queue.workspace = { workspace: { ...workspaceToSync, updatedAt: pending.workspace.queuedAt }, queuedAt: pending.workspace.queuedAt };
+        writePendingSync(user.uid, queue);
+        try {
+          const saveResponse = await putJson("/api/workspace", { workspace: queue.workspace.workspace });
+          if (!saveResponse.ok) throw new Error(await apiMessage(saveResponse, `Workspace save failed (${saveResponse.status})`));
+          const saved = await saveResponse.json();
+          clearPendingWorkspace(user.uid, pending.workspace.queuedAt);
+          workspaceForMonth = saved.workspace || queue.workspace.workspace;
+          applyWorkspacePayload(workspaceForMonth);
+        } catch {
+          workspaceForMonth = queue.workspace.workspace;
+          applyWorkspacePayload(workspaceForMonth);
+        }
       } else if (!hasWorkspaceData(remoteWorkspace) && hasWorkspaceData(localWorkspace)) {
         const localPrivacy = newestPrivacySettings(localWorkspace.privacySettings || {}, readPrivacySettings(user.uid));
         const localTemptations = ((localWorkspace.temptations || []).length ? localWorkspace.temptations : readLegacyTemptations()).map(normalizeTemptation).filter(Boolean);
@@ -771,7 +829,8 @@ function App() {
       const remaining = readPendingSync(user.uid);
       const remainingCount = (remaining.workspace ? 1 : 0) + Object.keys(remaining.days).length;
       setSyncState(remainingCount ? `Backend connected, ${remainingCount} change${remainingCount === 1 ? "" : "s"} pending` : `Backend connected: ${p.primaryStore || "backend"}`);
-    } catch (error) { setPrivacyReady(true); setSyncState(`Backend offline: ${error.message}`); }
+      setWorkspaceReady(true);
+    } catch (error) { setPrivacyReady(true); setWorkspaceReady(true); setSyncState(`Backend offline: ${error.message}`); }
   }
 
   async function saveWorkspace(nh) {
@@ -1113,13 +1172,14 @@ function App() {
     );
   }
 
-  if (!privacyReady) {
+  if (!privacyReady || !workspaceReady) {
     return (
       <div className="gate-screen">
         <section className="privacy-gate-card">
           <div className="privacy-lock-mark">••••</div>
           <span className="gate-kicker">DayForge</span>
           <h1>Preparing your private dashboard.</h1>
+          <p className="privacy-message">{syncState}</p>
         </section>
       </div>
     );
