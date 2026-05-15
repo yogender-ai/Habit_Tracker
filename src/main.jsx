@@ -58,6 +58,9 @@ const BOTTOM_QUOTES = [
   "Momentum is built one habit at a time.",
   "Stay locked in. Stay dangerous.",
   "You're stronger than your excuses.",
+  "Every temptation you resist makes you stronger.",
+  "Your dopamine reset is in progress. Stay sharp.",
+  "Replace the craving with the craft.",
 ];
 
 const LEGACY_DEFAULT_HABIT_IDS = new Set([
@@ -315,6 +318,8 @@ function App() {
   const [reminderDraft, setReminderDraft] = useState({ title: "", date: dayforgeTodayKey(), time: "09:00", priority: "normal" });
   const [dailyExtras, setDailyExtras] = useState({});
   const [extraDraft, setExtraDraft] = useState("");
+  const [temptations, setTemptations] = useState(() => { try { return JSON.parse(localStorage.getItem("dayforge_temptations") || "[]"); } catch { return []; } });
+  const [temptDraft, setTemptDraft] = useState("");
 
   const days = useMemo(() => monthDays(monthDate), [monthDate]);
   const monthId = monthKey(monthDate);
@@ -795,19 +800,28 @@ function App() {
           <div>
             <span className="gate-kicker">Day Forge</span>
             <h1>Your habit command center awaits.</h1>
-            <p>Track habits with a cosmic heatmap, build unbreakable streaks, get email reminders, and forge discipline that compounds.</p>
+            <p>Track habits with a precision heatmap, build unbreakable streaks, resist temptations, and forge discipline that compounds daily.</p>
             <div className="gate-features">
               <span className="gate-feature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg> Habit Heatmap</span>
               <span className="gate-feature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg> Email Reminders</span>
               <span className="gate-feature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg> Streak Analytics</span>
+              <span className="gate-feature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f472b6" strokeWidth="2"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg> Temptation Log</span>
             </div>
             <div className="gate-actions">
-              <button type="button" className="primary-button gate-cta" onClick={handleAuth}>Sign in with Google</button>
+              <button type="button" className="primary-button gate-cta" onClick={handleAuth}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg>
+                Sign in with Google
+              </button>
             </div>
             <small className="gate-status">{syncState}</small>
           </div>
           <div className="gate-visual">
             <img src={heroImg} alt="" onError={handleImageError} />
+            <div className="gate-visual-overlay">
+              <span className="gate-stat-badge">Heatmap</span>
+              <span className="gate-stat-badge">Streaks</span>
+              <span className="gate-stat-badge">Resist Mode</span>
+            </div>
           </div>
         </section>
       </div>
@@ -851,7 +865,7 @@ function App() {
               <button type="submit">Launch</button>
             </form>
             <div className="habit-suggestions">
-              {["Exercise 30 min","Read 10 pages","Meditate 10 min","No junk food","Sleep by 11pm"].map(s => (
+              {["Exercise 30 min","Read 10 pages","Meditate 10 min","No junk food","Sleep by 11pm","No phone 1hr","Cold shower","Journal 5 min"].map(s => (
                 <button key={s} type="button" className="suggestion-chip" onClick={() => setHabitDraft(s)}>{s}</button>
               ))}
             </div>
@@ -998,6 +1012,28 @@ function App() {
           <div className="stat-card"><div className="stat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="#22d3ee"/></svg></div><span className="stat-value">{fs}</span><div className="stat-label">Focus Score</div></div>
         </div>
         <TopHabitsCard rows={rows} />
+        <ResistCard
+          temptations={temptations}
+          draft={temptDraft}
+          setDraft={setTemptDraft}
+          onLog={(e) => {
+            e.preventDefault();
+            const t = temptDraft.trim(); if (!t) return;
+            const next = [{ id: uid(), label: t, resisted: true, time: new Date().toISOString() }, ...temptations].slice(0, 50);
+            setTemptations(next); setTemptDraft("");
+            localStorage.setItem("dayforge_temptations", JSON.stringify(next));
+          }}
+          onToggle={(id) => {
+            const next = temptations.map(item => item.id === id ? { ...item, resisted: !item.resisted } : item);
+            setTemptations(next);
+            localStorage.setItem("dayforge_temptations", JSON.stringify(next));
+          }}
+          onDelete={(id) => {
+            const next = temptations.filter(item => item.id !== id);
+            setTemptations(next);
+            localStorage.setItem("dayforge_temptations", JSON.stringify(next));
+          }}
+        />
         <ReminderCard reminders={reminders} draft={reminderDraft} setDraft={setReminderDraft} onAdd={addReminder} onDelete={deleteReminder} status={reminderState} />
         <DailyProgressCard rows={rows} daysCount={days.length} />
         <div className="quote-strip">{pick(BOTTOM_QUOTES)}</div>
@@ -1360,4 +1396,48 @@ function ReminderCard({ reminders, draft, setDraft, onAdd, onDelete, status }) {
     </div>
   );
 }
+
+function ResistCard({ temptations, draft, setDraft, onLog, onToggle, onDelete }) {
+  const today = dayforgeTodayKey();
+  const todayItems = temptations.filter(t => t.time && t.time.slice(0, 10) === today);
+  const resisted = todayItems.filter(t => t.resisted).length;
+  const total = todayItems.length;
+  return (
+    <div className="resist-card">
+      <div className="card-header">
+        <h3>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{verticalAlign:'middle',marginRight:4}}>
+            <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+          </svg>
+          Temptation Log
+        </h3>
+        <span className="resist-score">{resisted}/{total || 0} resisted</span>
+      </div>
+      <div className="resist-summary">
+        <span className="resist-badge">{resisted > 0 ? "\u{1F6E1}" : "\u26A0\uFE0F"} {resisted > 0 ? `${resisted} urge${resisted > 1 ? "s" : ""} defeated today` : "Log your first urge"}</span>
+      </div>
+      <form className="resist-form" onSubmit={onLog}>
+        <input value={draft} onChange={e => setDraft(e.target.value)} placeholder="What tempted you?" maxLength={60} />
+        <button type="submit" title="I resisted!">Resisted</button>
+      </form>
+      <div className="resist-presets">
+        {["Phone scroll", "Junk food", "Skipping workout", "Late sleep"].map(p => (
+          <button key={p} type="button" onClick={() => setDraft(p)}>{p}</button>
+        ))}
+      </div>
+      <div className="resist-list">
+        {temptations.length === 0 && <div className="resist-empty">No temptations logged yet. Stay strong.</div>}
+        {temptations.slice(0, 8).map(t => (
+          <div className={`resist-item ${t.resisted ? "won" : "lost"}`} key={t.id}>
+            <button type="button" className="resist-toggle" onClick={() => onToggle(t.id)} title={t.resisted ? "Mark as given in" : "Mark as resisted"}>{t.resisted ? "\u2713" : "\u2717"}</button>
+            <span className="resist-label">{t.label}</span>
+            <span className="resist-time">{new Date(t.time).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>
+            <button type="button" className="resist-del" onClick={() => onDelete(t.id)}>&times;</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 createRoot(document.getElementById("root")).render(<App />);
