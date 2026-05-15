@@ -1,5 +1,6 @@
 window.DAYFORGE_CONFIG = {
-    apiBaseUrl: "https://your-render-service.onrender.com",
+    // Leave empty when Vercel rewrites /api/* to Render, or set your Render API URL.
+    apiBaseUrl: "https://dayforge-api.onrender.com",
     firebase: {
         apiKey: "your-firebase-web-api-key",
         authDomain: "your-project.firebaseapp.com",

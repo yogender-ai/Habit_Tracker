@@ -4,7 +4,7 @@ DayForge is a recovery and focus dashboard for turning "remove addiction -> focu
 
 ## Stack
 
-- Frontend: Vite, vanilla JavaScript, Firebase browser auth
+- Frontend: Vite, React, Firebase browser auth
 - Backend: FastAPI, SQLAlchemy, Postgres/SQLite
 - Database: Neon/Postgres primary with optional secondary fallback
 - Notifications: Resend email API
@@ -32,13 +32,20 @@ window.DAYFORGE_CONFIG = {
 };
 ```
 
-The frontend always saves to `localStorage` first. If `apiBaseUrl` is empty, it works as a local-only app until the Render API is configured.
+You can also set the same connection at build time with Vite env vars:
+
+```bash
+VITE_API_BASE_URL=https://dayforge-api.onrender.com
+VITE_APP_TIMEZONE=Asia/Kolkata
+```
+
+The frontend always saves to `localStorage` first. In local dev, an empty `apiBaseUrl` points to `http://127.0.0.1:8000`. On Vercel, `vercel.json` proxies `/api/*` and `/health` to the Render backend before falling back to the SPA route.
 
 ## Local Backend
 
 ```bash
 pip install -r requirements.txt
-uvicorn app:app --reload
+npm run api
 ```
 
 If no database env vars are set, the backend uses local SQLite for testing.
@@ -49,7 +56,7 @@ Save these in the Render web service environment:
 
 ```bash
 APP_TIMEZONE=Asia/Kolkata
-CORS_ORIGINS=https://your-vercel-app.vercel.app,http://localhost:5173
+CORS_ORIGINS=https://your-vercel-app.vercel.app,http://localhost:5173,http://127.0.0.1:5173
 DATABASE_URL_PRIMARY=postgresql://...
 DATABASE_URL_SECONDARY=postgresql://...
 FIREBASE_PROJECT_ID=news-intel-d1bd3
@@ -69,7 +76,7 @@ For Resend, `RESEND_FROM_EMAIL` must use a sender/domain verified in Resend. Kee
 Create a cron job from Render Cron, cron-job.org, GitHub Actions, or any scheduler that calls:
 
 ```bash
-POST https://your-render-service.onrender.com/api/notifications/due
+POST https://dayforge-api.onrender.com/api/notifications/due
 X-Cron-Secret: your-NOTIFICATION_CRON_SECRET
 ```
 

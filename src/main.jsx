@@ -9,12 +9,40 @@ import {
   signOut
 } from "firebase/auth";
 
+const ENV = import.meta.env || {};
+const RUNTIME_CONFIG = window.DAYFORGE_CONFIG || {};
+
+function configValue(...values) {
+  for (const value of values) {
+    const text = String(value || "").trim();
+    if (text) return text;
+  }
+  return "";
+}
+
+function compactConfig(values) {
+  return Object.fromEntries(
+    Object.entries(values || {}).filter(([, value]) => String(value || "").trim())
+  );
+}
+
+const ENV_FIREBASE = compactConfig({
+  apiKey: ENV.VITE_FIREBASE_API_KEY,
+  authDomain: ENV.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: ENV.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: ENV.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: ENV.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: ENV.VITE_FIREBASE_APP_ID,
+  measurementId: ENV.VITE_FIREBASE_MEASUREMENT_ID
+});
+
 const CONFIG = {
-  apiBaseUrl: "",
-  appTimezone: "Asia/Kolkata",
-  firebase: {},
-  ...(window.DAYFORGE_CONFIG || {}),
-  firebase: { ...((window.DAYFORGE_CONFIG || {}).firebase || {}) }
+  apiBaseUrl: configValue(RUNTIME_CONFIG.apiBaseUrl, ENV.VITE_API_BASE_URL),
+  appTimezone: configValue(RUNTIME_CONFIG.appTimezone, ENV.VITE_APP_TIMEZONE) || "Asia/Kolkata",
+  firebase: {
+    ...ENV_FIREBASE,
+    ...compactConfig(RUNTIME_CONFIG.firebase)
+  }
 };
 
 const DEFAULT_HABITS = [
@@ -86,7 +114,13 @@ function apiBase() {
   const configured = String(CONFIG.apiBaseUrl || "").trim().replace(/\/$/, "");
   if (configured) return configured;
   if (location.hostname === "127.0.0.1" || location.hostname === "localhost") return "http://127.0.0.1:8000";
-  return location.origin;
+  return "";
+}
+
+function apiUrl(path) {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const base = apiBase();
+  return base ? `${base}${normalizedPath}` : normalizedPath;
 }
 
 function hasFirebaseConfig() {
@@ -169,7 +203,7 @@ function App() {
     if (!user) return;
     try {
       setSyncState("Syncing month...");
-      const response = await fetch(`${apiBase()}/api/snapshot?year=${monthDate.getFullYear()}`, {
+      const response = await fetch(apiUrl(`/api/snapshot?year=${monthDate.getFullYear()}`), {
         headers: await authHeaders()
       });
       if (!response.ok) throw new Error("snapshot failed");
@@ -191,7 +225,7 @@ function App() {
   async function saveWorkspace(nextHabits) {
     if (!user) return;
     try {
-      await fetch(`${apiBase()}/api/workspace`, {
+      await fetch(apiUrl("/api/workspace"), {
         method: "PUT",
         headers: await authHeaders(),
         body: JSON.stringify({
@@ -221,7 +255,7 @@ function App() {
     if (localStorage.getItem(key)) return;
     try {
       setWelcomeState("Sending welcome email...");
-      const response = await fetch(`${apiBase()}/api/notifications/welcome`, {
+      const response = await fetch(apiUrl("/api/notifications/welcome"), {
         method: "POST",
         headers: await authHeaders(),
         body: JSON.stringify({
@@ -242,7 +276,7 @@ function App() {
     try {
       const done = activeHabits.filter((habit) => checks[habit.id]).length;
       const status = done === activeHabits.length ? "won" : done > 0 ? "neutral" : "missed";
-      await fetch(`${apiBase()}/api/days/${dateKey}`, {
+      await fetch(apiUrl(`/api/days/${dateKey}`), {
         method: "PUT",
         headers: await authHeaders(),
         body: JSON.stringify({
