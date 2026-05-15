@@ -5,24 +5,22 @@ import {
   getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut
 } from "firebase/auth";
 
-const CONFIG = {
-  apiBaseUrl: "",
-  appTimezone: "Asia/Kolkata",
-  firebase: {},
-  ...(window.DAYFORGE_CONFIG || {}),
-  firebase: { ...((window.DAYFORGE_CONFIG || {}).firebase || {}) }
+const VITE_ENV = import.meta.env || {};
+const RUNTIME_CONFIG = window.DAYFORGE_CONFIG || {};
+const ENV_FIREBASE = {
+  apiKey: VITE_ENV.VITE_FIREBASE_API_KEY || "",
+  authDomain: VITE_ENV.VITE_FIREBASE_AUTH_DOMAIN || "",
+  projectId: VITE_ENV.VITE_FIREBASE_PROJECT_ID || "",
+  storageBucket: VITE_ENV.VITE_FIREBASE_STORAGE_BUCKET || "",
+  messagingSenderId: VITE_ENV.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: VITE_ENV.VITE_FIREBASE_APP_ID || "",
+  measurementId: VITE_ENV.VITE_FIREBASE_MEASUREMENT_ID || "",
 };
-
-const DEFAULT_HABITS = [
-  { id: "clean-room", title: "Room clean routine", category: "Life", targetPerWeek: 7, active: true },
-  { id: "assignments", title: "Complete assignments", category: "Study", targetPerWeek: 7, active: true },
-  { id: "digital-files", title: "Organize digital files", category: "Focus", targetPerWeek: 5, active: true },
-  { id: "read", title: "Read 10 pages of a book", category: "Growth", targetPerWeek: 7, active: true },
-  { id: "exercise", title: "Exercise for 30 minutes", category: "Health", targetPerWeek: 5, active: true },
-  { id: "water", title: "Drink 8 glasses of water", category: "Health", targetPerWeek: 7, active: true },
-  { id: "plan", title: "Plan next day's schedule", category: "Focus", targetPerWeek: 6, active: true },
-  { id: "meditate", title: "Meditate for 10 minutes", category: "Mind", targetPerWeek: 7, active: true },
-];
+const CONFIG = {
+  apiBaseUrl: String(RUNTIME_CONFIG.apiBaseUrl || VITE_ENV.VITE_API_BASE_URL || "").trim(),
+  appTimezone: RUNTIME_CONFIG.appTimezone || VITE_ENV.VITE_APP_TIMEZONE || "Asia/Kolkata",
+  firebase: { ...ENV_FIREBASE, ...(RUNTIME_CONFIG.firebase || {}) }
+};
 
 const QUOTES = [
   "Discipline is the forge. Habits are the hammer. You are the blacksmith.",
@@ -38,6 +36,11 @@ const MISSION_LINES = [
   "Every small action compounds.", "Forge your legacy, one habit at a time.",
   "The grind is the glory.", "Discipline equals freedom.",
 ];
+
+const LEGACY_DEFAULT_HABIT_IDS = new Set([
+  "clean-room", "assignments", "digital-files", "read",
+  "exercise", "water", "plan", "meditate",
+]);
 
 const HERO_IMAGES = [
   // Gym & Weightlifting
@@ -112,13 +115,18 @@ function monthDays(d) { const y=d.getFullYear(),m=d.getMonth(),t=new Date(y,m+1,
 function uid() { return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`; }
 function readLocal(u,k) { try{return JSON.parse(localStorage.getItem(`dayforge_${u}_${k}`))||{}}catch{return{}} }
 function writeLocal(u,k,v) { localStorage.setItem(`dayforge_${u}_${k}`,JSON.stringify(v)); }
+function readLocalWorkspace(u) { return readLocal(u, "workspace"); }
+function writeLocalWorkspace(u, workspace) { writeLocal(u, "workspace", workspace); }
 function apiBase() { const c=String(CONFIG.apiBaseUrl||"").trim().replace(/\/$/,""); if(c) return c; if(location.hostname==="127.0.0.1"||location.hostname==="localhost") return "http://127.0.0.1:8000"; return location.origin; }
 function hasFirebaseConfig() { const f=CONFIG.firebase||{}; return Boolean(f.apiKey&&f.authDomain&&f.projectId&&f.appId); }
 function normalizeHabit(h) { return { id:String(h.id||uid()), title:String(h.title||"New habit").slice(0,90), category:String(h.category||"Focus").slice(0,40), targetPerWeek:Math.max(1,Math.min(7,Number(h.targetPerWeek||h.target||5))), active:h.active!==false, createdAt:h.createdAt||new Date().toISOString() }; }
+function isLegacyDefaultHabit(h) { return LEGACY_DEFAULT_HABIT_IDS.has(String(h.id || "")); }
+function workspaceFor(user, habits) { return { profile: { displayName: user.displayName || user.email || "Warrior", mission: "Win the month." }, habits: habits.filter(h => !isLegacyDefaultHabit(h)), notificationSettings: { enabled: Boolean(user.email), email: user.email || "", timezone: CONFIG.appTimezone } }; }
+async function apiMessage(response, fallback) { try { const body = await response.json(); return body.detail || body.error || fallback; } catch { return fallback; } }
 
 function dayStats(checks={}, habits=[]) { const t=habits.length||1, d=habits.filter(h=>checks[h.id]).length; return {done:d,total:t,pct:Math.round((d/t)*100)}; }
 function buildMonthStats(grid,days,habits) { const daily=days.map(d=>dayStats(grid[toDateKey(d)]||{},habits)); const done=daily.reduce((s,i)=>s+i.done,0); const total=daily.reduce((s,i)=>s+i.total,0)||1; return {daily,done,total,pct:Math.round((done/total)*100)}; }
-function buildWeeklyStats(grid,days,habits) { const chunks=[]; for(let i=0;i<days.length;i+=7) chunks.push(days.slice(i,i+7)); return chunks.map((c,i)=>{const s=buildMonthStats(grid,c,habits); const f=c[0],l=c[c.length-1]; return {...s,label:`Week ${i+1}`,range:`${f.toLocaleDateString("en-US",{month:"short",day:"numeric"})} – ${l.toLocaleDateString("en-US",{month:"short",day:"numeric"})}`};}); }
+function buildWeeklyStats(grid,days,habits) { const chunks=[]; for(let i=0;i<days.length;i+=7) chunks.push(days.slice(i,i+7)); return chunks.map((c,i)=>{const s=buildMonthStats(grid,c,habits); const f=c[0],l=c[c.length-1]; return {...s,label:`Week ${i+1}`,range:`${f.toLocaleDateString("en-US",{month:"short",day:"numeric"})} - ${l.toLocaleDateString("en-US",{month:"short",day:"numeric"})}`};}); }
 function habitRows(grid,days,habits) { return habits.map(h=>{const vals=days.map(d=>Boolean(grid[toDateKey(d)]?.[h.id])); const done=vals.filter(Boolean).length; let best=0,run=0; vals.forEach(v=>{run=v?run+1:0;best=Math.max(best,run)}); return {...h,done,total:days.length,pct:Math.round((done/days.length)*100),streak:best};}).sort((a,b)=>b.pct-a.pct||a.title.localeCompare(b.title)); }
 function currentStreak(grid,habits) { const today=new Date(); let streak=0; for(let i=0;i<365;i++){const d=new Date(today);d.setDate(d.getDate()-i); const k=toDateKey(d),c=grid[k]||{}; const done=habits.filter(h=>c[h.id]).length; if(done>0)streak++;else break;} return streak; }
 function longestStreak(grid,habits) { const today=new Date(); let best=0,run=0; for(let i=365;i>=0;i--){const d=new Date(today);d.setDate(d.getDate()-i); const k=toDateKey(d),c=grid[k]||{}; if(habits.filter(h=>c[h.id]).length>0){run++;best=Math.max(best,run)}else{run=0}} return best; }
@@ -130,7 +138,7 @@ function App() {
   const [authReady, setAuthReady] = useState(false);
   const [monthDate, setMonthDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(toDateKey(new Date()));
-  const [habits, setHabits] = useState(DEFAULT_HABITS);
+  const [habits, setHabits] = useState([]);
   const [grid, setGrid] = useState({});
   const [theme, setTheme] = useState(localStorage.getItem("dayforge_theme") || "dark");
   const [syncState, setSyncState] = useState("Waiting for sign in");
@@ -154,7 +162,15 @@ function App() {
 
   useEffect(() => { document.body.dataset.theme = theme; localStorage.setItem("dayforge_theme", theme); }, [theme]);
 
-  useEffect(() => { if (!user) return; setGrid(readLocal(user.uid, monthId)); syncFromBackend(); sendWelcomeEmail(); }, [user, monthId]);
+  useEffect(() => {
+    if (!user) return;
+    const localWorkspace = readLocalWorkspace(user.uid);
+    const localHabits = (localWorkspace.habits || []).map(normalizeHabit).filter(h => !isLegacyDefaultHabit(h));
+    setHabits(localHabits);
+    setGrid(readLocal(user.uid, monthId));
+    syncFromBackend();
+    sendWelcomeEmail();
+  }, [user, monthId]);
   useEffect(() => { if (!user) return; writeLocal(user.uid, monthId, grid); }, [grid, monthId, user]);
 
   async function authHeaders() {
@@ -168,39 +184,46 @@ function App() {
     try {
       setSyncState("Syncing...");
       const r = await fetch(`${apiBase()}/api/snapshot?year=${monthDate.getFullYear()}`, { headers: await authHeaders() });
-      if (!r.ok) throw new Error("snapshot failed");
+      if (!r.ok) throw new Error(await apiMessage(r, `Snapshot failed (${r.status})`));
       const p = await r.json();
-      const wh = (p.workspace?.habits || []).map(normalizeHabit).filter(h => h.active);
-      setHabits(wh.length ? wh : DEFAULT_HABITS);
+      const wh = (p.workspace?.habits || []).map(normalizeHabit).filter(h => h.active && !isLegacyDefaultHabit(h));
+      if (wh.length) {
+        setHabits(wh);
+        writeLocalWorkspace(user.uid, { ...(p.workspace || {}), habits: wh });
+      }
       const ng = {};
       days.forEach(d => { const k = toDateKey(d); ng[k] = p.days?.[k]?.habitChecks || {}; });
       setGrid(c => ({ ...ng, ...c }));
-      setSyncState(`Synced → ${p.primaryStore || "backend"}`);
-    } catch { setSyncState("Offline — using local cache"); }
+      setSyncState(`Backend connected: ${p.primaryStore || "backend"}`);
+    } catch (error) { setSyncState(`Backend offline: ${error.message}`); }
   }
 
   async function saveWorkspace(nh) {
     if (!user) return;
+    const workspace = workspaceFor(user, nh);
+    writeLocalWorkspace(user.uid, workspace);
     try {
-      await fetch(`${apiBase()}/api/workspace`, {
+      const r = await fetch(`${apiBase()}/api/workspace`, {
         method: "PUT", headers: await authHeaders(),
-        body: JSON.stringify({ workspace: { profile: { displayName: user.displayName || user.email || "Warrior", mission: "Win the month." }, habits: nh, notificationSettings: { enabled: true, email: user.email || "", timezone: CONFIG.appTimezone } } })
+        body: JSON.stringify({ workspace })
       });
-      setSyncState("Habits saved");
-    } catch { setSyncState("Saved locally"); }
+      if (!r.ok) throw new Error(await apiMessage(r, `Workspace save failed (${r.status})`));
+      const p = await r.json();
+      if (p.workspace) writeLocalWorkspace(user.uid, p.workspace);
+      setSyncState(`Habits saved: ${p.store || "backend"}`);
+    } catch (error) { setSyncState(`Saved locally: ${error.message}`); }
   }
 
   async function sendWelcomeEmail() {
     if (!user) return;
-    const k = `dayforge_welcome_${user.uid}`;
-    if (localStorage.getItem(k)) return;
+    if (!user.email) { setWelcomeState("No Google email found"); return; }
     try {
       setWelcomeState("Sending welcome...");
       const r = await fetch(`${apiBase()}/api/notifications/welcome`, { method: "POST", headers: await authHeaders(), body: JSON.stringify({ email: user.email, displayName: user.displayName || "Warrior" }) });
-      if (!r.ok) throw new Error();
-      localStorage.setItem(k, "sent");
-      setWelcomeState("Welcome sent ✓");
-    } catch { setWelcomeState("Welcome pending"); }
+      if (!r.ok) throw new Error(await apiMessage(r, `Welcome failed (${r.status})`));
+      const p = await r.json();
+      setWelcomeState(p.alreadySent ? "Welcome already sent" : "Welcome sent");
+    } catch (error) { setWelcomeState(`Welcome failed: ${error.message}`); }
   }
 
   async function pushDay(dk, checks) {
@@ -208,12 +231,13 @@ function App() {
     try {
       const done = activeHabits.filter(h => checks[h.id]).length;
       const status = done === activeHabits.length ? "won" : done > 0 ? "neutral" : "missed";
-      await fetch(`${apiBase()}/api/days/${dk}`, {
+      const r = await fetch(`${apiBase()}/api/days/${dk}`, {
         method: "PUT", headers: await authHeaders(),
         body: JSON.stringify({ day: { dateKey: dk, status, focusLine: quote, habitChecks: checks, tasks: activeHabits.map(h => ({ id: h.id, title: h.title, text: h.title, done: Boolean(checks[h.id]), priority: "medium", estimateMins: 20 })) } })
       });
-      setSyncState("Saved ✓");
-    } catch { setSyncState("Saved locally"); }
+      if (!r.ok) throw new Error(await apiMessage(r, `Day save failed (${r.status})`));
+      setSyncState("Day saved");
+    } catch (error) { setSyncState(`Saved locally: ${error.message}`); }
   }
 
   function toggleHabit(dk, hid) {
@@ -244,9 +268,33 @@ function App() {
             <span className="gate-kicker">Day Forge</span>
             <h1>Sign in to enter your habit command center.</h1>
             <p>Track habits, build streaks, forge discipline. Your monthly grid syncs after Google sign-in.</p>
-            <button type="button" className="primary-button" onClick={handleAuth}>⚡ Sign in with Google</button>
-            <button type="button" className="theme-button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>{theme === "dark" ? "☀️ Light" : "🌙 Dark"}</button>
+            <button type="button" className="primary-button" onClick={handleAuth}>Sign in with Google</button>
+            <button type="button" className="theme-button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>{theme === "dark" ? "Light" : "Dark"}</button>
             <small>{syncState}</small>
+          </div>
+          <img src={heroImg} alt="Discipline training" />
+        </section>
+      </div>
+    );
+  }
+
+  if (activeHabits.length === 0) {
+    return (
+      <div className="gate-screen">
+        <section className="gate-card first-habit-card">
+          <div>
+            <span className="gate-kicker">First habit</span>
+            <h1>Add one habit before the dashboard opens.</h1>
+            <p>Your tracker starts empty now. Add the first habit you actually want to build, then the dashboard will unlock and sync it to the backend when the API is connected.</p>
+            <form className="first-habit-form" onSubmit={addHabit}>
+              <input value={habitDraft} onChange={e => setHabitDraft(e.target.value)} placeholder="Example: Study for 45 minutes" maxLength={80} autoFocus />
+              <button type="submit">Start</button>
+            </form>
+            <div className="first-habit-actions">
+              <button className="auth-button" type="button" onClick={handleAuth}>Sign out</button>
+              <button className="theme-button small" type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>Theme</button>
+            </div>
+            <small>{syncState} - {welcomeState}</small>
           </div>
           <img src={heroImg} alt="Discipline training" />
         </section>
@@ -281,13 +329,13 @@ function App() {
         </div>
         <figure className="focus-card">
           <img src={heroImg} alt="Warrior training" />
-          <figcaption>❝ {quote} ❞</figcaption>
+          <figcaption>"{quote}"</figcaption>
         </figure>
         <div className="habit-list-card">
-          <h2>✦ Daily Habits</h2>
+          <h2>Daily Habits</h2>
           <ol>
             {activeHabits.map(h => (
-              <li key={h.id}><span>{h.title}</span><button type="button" onClick={() => deleteHabit(h.id)} aria-label={`Delete ${h.title}`}>×</button></li>
+              <li key={h.id}><span>{h.title}</span><button type="button" onClick={() => deleteHabit(h.id)} aria-label={`Delete ${h.title}`}>x</button></li>
             ))}
           </ol>
         </div>
@@ -297,9 +345,9 @@ function App() {
         </form>
         <div className="account-row">
           <button className="auth-button" type="button" onClick={handleAuth}>Sign out</button>
-          <button className="theme-button small" type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>{theme === "dark" ? "☀️" : "🌙"}</button>
+          <button className="theme-button small" type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>Theme</button>
         </div>
-        <p className="sync-line">{syncState} · {welcomeState}</p>
+        <p className="sync-line">{syncState} - {welcomeState}</p>
       </section>
 
       {/* CENTER PANEL */}
@@ -313,20 +361,20 @@ function App() {
       {/* RIGHT PANEL */}
       <section className="right-panel">
         <div className="stat-cards">
-          <div className="stat-card"><div className="stat-icon">🔥</div><span className="stat-value">{cs}</span><div className="stat-label">Current Streak</div></div>
-          <div className="stat-card"><div className="stat-icon">✅</div><span className="stat-value">{todayStats.done}</span><div className="stat-label">Done Today</div></div>
-          <div className="stat-card"><div className="stat-icon">📈</div><span className="stat-value">{ms.pct}%</span><div className="stat-label">Completion</div></div>
-          <div className="stat-card"><div className="stat-icon">🎯</div><span className="stat-value">{fs}</span><div className="stat-label">Focus Score</div></div>
+          <div className="stat-card"><div className="stat-icon">S</div><span className="stat-value">{cs}</span><div className="stat-label">Current Streak</div></div>
+          <div className="stat-card"><div className="stat-icon">D</div><span className="stat-value">{todayStats.done}</span><div className="stat-label">Done Today</div></div>
+          <div className="stat-card"><div className="stat-icon">%</div><span className="stat-value">{ms.pct}%</span><div className="stat-label">Completion</div></div>
+          <div className="stat-card"><div className="stat-icon">F</div><span className="stat-value">{fs}</span><div className="stat-label">Focus Score</div></div>
         </div>
         <TopHabitsCard rows={rows} />
         <DailyProgressCard rows={rows} daysCount={days.length} />
-        <div className="quote-strip">✦ Keep forging. You've got this. ✦</div>
+        <div className="quote-strip">Keep forging. You've got this.</div>
       </section>
     </main>
   );
 }
 
-/* ── SUB-COMPONENTS ────────────────── */
+/* SUB-COMPONENTS */
 
 function Ring({ value, size = 80 }) {
   return (
@@ -375,13 +423,13 @@ function Heatmap({ days, grid, habits, todayKey, selectedDate, onSelect, onToggl
     if (r <= 0.25) return 1; if (r <= 0.5) return 2; if (r <= 0.75) return 3; if (r < 1) return 4; return 5;
   }
 
-  // Build a 7-row × N-col grid where each day goes into its weekday row
+  // Build a 7-row x N-col grid where each day goes into its weekday row
   const firstDow = (days[0].getDay() + 6) % 7; // 0=Mon
   const totalCols = days.length;
 
   return (
     <div className="heatmap-card" style={{"--days": totalCols}}>
-      <div className="heatmap-title">🗓 {monthDate.toLocaleDateString("en-US",{month:"long",year:"numeric"})} · Consistency Heatmap</div>
+      <div className="heatmap-title">{monthDate.toLocaleDateString("en-US",{month:"long",year:"numeric"})} - Consistency Heatmap</div>
       <div className="heatmap-grid">
         {/* Column headers: day numbers */}
         <div className="day-label"></div>
@@ -428,7 +476,7 @@ function Heatmap({ days, grid, habits, todayKey, selectedDate, onSelect, onToggl
 function WeeklySection({ weeks }) {
   return (
     <div className="weekly-card">
-      <div className="weekly-title">📊 Weekly Progress</div>
+      <div className="weekly-title">Weekly Progress</div>
       <div className="ring-row">
         {weeks.map(w => (
           <div className="week-ring" key={w.label}>
@@ -476,7 +524,7 @@ function DailyProgressCard({ rows, daysCount }) {
                 <td>{r.title}</td>
                 <td>{r.targetPerWeek}/wk</td>
                 <td><span className="mini-bar"><i style={{width:`${r.pct}%`}} /></span> {r.pct}%</td>
-                <td className="streak">🔥 {r.streak}</td>
+                <td className="streak">{r.streak}</td>
               </tr>
             ))}
           </tbody>

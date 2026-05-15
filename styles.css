@@ -64,6 +64,11 @@ input:focus,select:focus{border-color:var(--purple)}
 .gate-card p{max-width:440px;color:var(--muted);font-size:14px;line-height:1.7}
 .gate-card img{width:100%;height:400px;object-fit:cover;border-radius:var(--radius);filter:brightness(.75) saturate(1.2)}
 .gate-card small{display:block;margin-top:14px;color:var(--dim);font-weight:700;font-size:10px}
+.first-habit-card{min-height:520px}
+.first-habit-form{display:grid;grid-template-columns:minmax(0,1fr) 96px;gap:10px;margin-top:22px;max-width:500px}
+.first-habit-form input{min-height:46px;padding:0 14px;font-size:14px;font-weight:700}
+.first-habit-form button{min-height:46px;border:0;border-radius:var(--radius-sm);background:linear-gradient(135deg,var(--indigo),var(--purple));color:#fff;font-size:13px;font-weight:800}
+.first-habit-actions{display:grid;grid-template-columns:1fr 52px;gap:8px;max-width:220px;margin-top:14px}
 .primary-button{
   min-height:44px;padding:0 24px;border-radius:var(--radius-sm);font-weight:700;font-size:13px;
   background:linear-gradient(135deg,var(--indigo),var(--purple));color:#fff;border:none;
@@ -340,6 +345,7 @@ input:focus,select:focus{border-color:var(--purple)}
 @media(max-width:720px){
   .gate-card{grid-template-columns:1fr;padding:24px}
   .gate-card img{height:240px}
+  .first-habit-form{grid-template-columns:1fr}
   .forge-screen{width:100%;margin:0;padding:8px}
   .stat-cards,.ring-row{grid-template-columns:1fr 1fr}
 }

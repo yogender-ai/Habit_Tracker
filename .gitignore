@@ -3,6 +3,7 @@ __pycache__/
 .env
 .env.*
 !.env.example
+local-*.log
 dayforge_local.db
 node_modules/
 dist/
