@@ -311,7 +311,21 @@ function App() {
 
   async function handleAuth() { if (!auth) return; if (auth.currentUser) await signOut(auth); else await signInWithPopup(auth, new GoogleAuthProvider()); }
 
-  if (!authReady) return <div className="gate-screen"><div className="gate-card" style={{display:'grid',placeItems:'center'}}>Loading DayForge...</div></div>;
+  if (!authReady) return (
+    <div className="gate-screen">
+      <div className="loading-splash">
+        <div className="loading-ring">
+          <svg viewBox="0 0 100 100" width="80" height="80">
+            <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(167,139,250,0.1)" strokeWidth="4"/>
+            <circle cx="50" cy="50" r="42" fill="none" stroke="url(#loadGrad)" strokeWidth="4" strokeLinecap="round" strokeDasharray="60 200" className="loading-arc"/>
+            <defs><linearGradient id="loadGrad"><stop offset="0%" stopColor="#818cf8"/><stop offset="100%" stopColor="#f472b6"/></linearGradient></defs>
+          </svg>
+        </div>
+        <h1 className="loading-brand">DayForge</h1>
+        <p className="loading-tagline">Forging your discipline engine<span className="loading-dots"><span>.</span><span>.</span><span>.</span></span></p>
+      </div>
+    </div>
+  );
 
   if (!user) {
     return (
@@ -319,13 +333,21 @@ function App() {
         <section className="gate-card">
           <div>
             <span className="gate-kicker">Day Forge</span>
-            <h1>Sign in to enter your habit command center.</h1>
-            <p>Track habits, build streaks, forge discipline. Your monthly grid syncs after Google sign-in.</p>
-            <button type="button" className="primary-button" onClick={handleAuth}>Sign in with Google</button>
-            <button type="button" className="theme-button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></button>
-            <small>{syncState}</small>
+            <h1>Your habit command center awaits.</h1>
+            <p>Track habits with a cosmic heatmap, build unbreakable streaks, get email reminders, and forge discipline that compounds.</p>
+            <div className="gate-features">
+              <span className="gate-feature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg> Habit Heatmap</span>
+              <span className="gate-feature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg> Email Reminders</span>
+              <span className="gate-feature"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg> Streak Analytics</span>
+            </div>
+            <div className="gate-actions">
+              <button type="button" className="primary-button gate-cta" onClick={handleAuth}>Sign in with Google</button>
+            </div>
+            <small className="gate-status">{syncState}</small>
           </div>
-          <img src={heroImg} alt="" onError={e => {e.target.style.background='linear-gradient(135deg,#1a1040,#0d0d2b)';e.target.style.minHeight='300px'}} />
+          <div className="gate-visual">
+            <img src={heroImg} alt="" onError={e => {e.target.style.display='none'}} />
+          </div>
         </section>
       </div>
     );
@@ -336,20 +358,25 @@ function App() {
       <div className="gate-screen">
         <section className="gate-card first-habit-card">
           <div>
-            <span className="gate-kicker">First habit</span>
-            <h1>Add one habit before the dashboard opens.</h1>
-            <p>Your tracker starts empty now. Add the first habit you actually want to build, then the dashboard will unlock and sync it to the backend when the API is connected.</p>
+            <span className="gate-kicker">Almost there</span>
+            <h1>Add your first habit to unlock the dashboard.</h1>
+            <p>Start with one real habit. Your heatmap, streaks, and reminders activate once you add it.</p>
             <form className="first-habit-form" onSubmit={addHabit}>
-              <input value={habitDraft} onChange={e => setHabitDraft(e.target.value)} placeholder="Example: Study for 45 minutes" maxLength={80} autoFocus />
-              <button type="submit">Start</button>
+              <input value={habitDraft} onChange={e => setHabitDraft(e.target.value)} placeholder="e.g. Study for 45 minutes" maxLength={80} autoFocus />
+              <button type="submit">Launch</button>
             </form>
+            <div className="habit-suggestions">
+              {["Exercise 30 min","Read 10 pages","Meditate 10 min","No junk food","Sleep by 11pm"].map(s => (
+                <button key={s} type="button" className="suggestion-chip" onClick={() => setHabitDraft(s)}>{s}</button>
+              ))}
+            </div>
             <div className="first-habit-actions">
               <button className="auth-button" type="button" onClick={handleAuth}>Sign out</button>
-              <button className="theme-button small" type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></button>
+              <button className="theme-button small" type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>Theme</button>
             </div>
-            <small>{syncState} - {welcomeState}</small>
+            <small>{syncState}</small>
           </div>
-          <img src={heroImg} alt="" onError={e => {e.target.style.background='linear-gradient(135deg,#1a1040,#0d0d2b)';e.target.style.minHeight='300px'}} />
+          <img src={heroImg} alt="" onError={e => {e.target.style.display='none'}} />
         </section>
       </div>
     );
