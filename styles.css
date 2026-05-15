@@ -890,6 +890,7 @@ input:focus,select:focus{border-color:var(--purple)}
 
 /* ── SLEEP TRACKER ────────────────────── */
 .sleep-card{
+  flex:0 0 auto;min-height:92px;
   border:1px solid var(--border);border-radius:var(--radius);background:var(--glass);
   overflow:hidden;transition:border-color .3s;
 }
