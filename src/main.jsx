@@ -1434,12 +1434,6 @@ function App() {
       <section className="center-panel" style={{"--days": days.length}}>
         <MissionBanner missionLine={missionLine} pct={ms.pct} firstName={firstName} todayStats={todayStats} cs={cs} ws={ws} activeHabits={activeHabits} />
         <ProgressBar pct={ms.pct} done={ms.done} total={ms.total} daysCount={days.length} />
-        <SleepCard
-          log={sleepLog}
-          todayKey={todayKey}
-          onSleep={markGoingToSleep}
-          onWake={markAwake}
-        />
         <Heatmap
           days={days}
           grid={grid}
@@ -1467,6 +1461,12 @@ function App() {
           <div className="stat-card"><div className="stat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg></div><span className="stat-value">{ms.pct}%</span><div className="stat-label">Completion</div></div>
           <div className="stat-card"><div className="stat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="#22d3ee"/></svg></div><span className="stat-value">{fs}</span><div className="stat-label">Focus Score</div></div>
         </div>
+        <SleepCard
+          log={sleepLog}
+          todayKey={todayKey}
+          onSleep={markGoingToSleep}
+          onWake={markAwake}
+        />
         <TopHabitsCard rows={rows} />
         <ResistCard
           temptations={temptations}
