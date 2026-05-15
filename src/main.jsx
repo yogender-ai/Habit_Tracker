@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { initializeApp } from "firebase/app";
 import {
@@ -143,10 +143,13 @@ function monthDays(d) { const y=d.getFullYear(),m=d.getMonth(),t=new Date(y,m+1,
 function uid() { return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`; }
 function readLocal(u,k) { try{return JSON.parse(localStorage.getItem(`dayforge_${u}_${k}`))||{}}catch{return{}} }
 function writeLocal(u,k,v) { localStorage.setItem(`dayforge_${u}_${k}`,JSON.stringify(v)); }
+function removeLocal(u,k) { localStorage.removeItem(`dayforge_${u}_${k}`); }
 function readLocalWorkspace(u) { return readLocal(u, "workspace"); }
 function writeLocalWorkspace(u, workspace) { writeLocal(u, "workspace", workspace); }
 function readPrivacySettings(u) { return readLocal(u, "privacy"); }
 function writePrivacySettings(u, settings) { writeLocal(u, "privacy", settings); }
+function readLegacyTemptations() { try { return JSON.parse(localStorage.getItem("dayforge_temptations") || "[]"); } catch { return []; } }
+function writeLegacyTemptations(temptations) { localStorage.setItem("dayforge_temptations", JSON.stringify(temptations)); }
 function apiBase() { const c=String(CONFIG.apiBaseUrl||"").trim().replace(/\/$/,""); if(c) return c; if(location.hostname==="127.0.0.1"||location.hostname==="localhost") return "http://127.0.0.1:8000"; return location.origin; }
 function hasFirebaseConfig() { const f=CONFIG.firebase||{}; return Boolean(f.apiKey&&f.authDomain&&f.projectId&&f.appId); }
 function normalizeHabit(h) { return { id:String(h.id||uid()), title:String(h.title||"New habit").slice(0,90), category:String(h.category||"Focus").slice(0,40), targetPerWeek:Math.max(1,Math.min(7,Number(h.targetPerWeek||h.target||5))), active:h.active!==false, createdAt:h.createdAt||"1970-01-01T00:00:00.000Z", deletedAt:h.deletedAt||(h.active===false?(h.updatedAt||new Date().toISOString()):"") }; }
@@ -175,7 +178,22 @@ function defaultDisplayName(user) {
   const raw = user?.displayName || user?.email?.split("@")[0] || "Champion";
   return String(raw).trim() || "Champion";
 }
-function workspaceFor(user, habits, reminders = [], profile = {}, settings = {}, privacy = {}) {
+function normalizeTemptation(item = {}) {
+  const label = String(item.label || item.title || "").trim().slice(0, 80);
+  if (!label) return null;
+  return {
+    id: String(item.id || uid()),
+    label,
+    resisted: item.resisted !== false,
+    time: item.time || item.createdAt || new Date().toISOString(),
+  };
+}
+function normalizePreferences(preferences = {}) {
+  return {
+    theme: preferences.theme === "light" ? "light" : "dark",
+  };
+}
+function workspaceFor(user, habits, reminders = [], profile = {}, settings = {}, privacy = {}, synced = {}) {
   const email = settings.email || user?.email || "";
   const cleanPrivacy = normalizePrivacySettings(privacy);
   return {
@@ -186,6 +204,8 @@ function workspaceFor(user, habits, reminders = [], profile = {}, settings = {},
     },
     habits: habits.filter(h => !isLegacyDefaultHabit(h)),
     reminders,
+    temptations: (synced.temptations || []).map(normalizeTemptation).filter(Boolean).slice(0, 50),
+    preferences: normalizePreferences(synced.preferences || {}),
     notificationSettings: {
       ...settings,
       enabled: Boolean(email),
@@ -194,6 +214,76 @@ function workspaceFor(user, habits, reminders = [], profile = {}, settings = {},
     },
     privacySettings: cleanPrivacy,
   };
+}
+function normalizePendingSync(queue = {}) {
+  const days = {};
+  if (queue.days && typeof queue.days === "object") {
+    Object.entries(queue.days).forEach(([dateKey, item]) => {
+      if (item?.day && /^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+        days[dateKey] = { dateKey, day: item.day, queuedAt: item.queuedAt || item.day.updatedAt || new Date().toISOString() };
+      }
+    });
+  }
+  const workspace = queue.workspace?.workspace
+    ? { workspace: queue.workspace.workspace, queuedAt: queue.workspace.queuedAt || queue.workspace.workspace.updatedAt || new Date().toISOString() }
+    : null;
+  return { workspace, days };
+}
+function readPendingSync(userId) { return normalizePendingSync(readLocal(userId, "pending_sync")); }
+function writePendingSync(userId, queue) {
+  const clean = normalizePendingSync(queue);
+  if (!clean.workspace && Object.keys(clean.days).length === 0) removeLocal(userId, "pending_sync");
+  else writeLocal(userId, "pending_sync", clean);
+}
+function queuePendingWorkspace(userId, workspace) {
+  const queuedAt = new Date().toISOString();
+  const queue = readPendingSync(userId);
+  const stampedWorkspace = { ...workspace, updatedAt: queuedAt };
+  queue.workspace = { workspace: stampedWorkspace, queuedAt };
+  writePendingSync(userId, queue);
+  writeLocalWorkspace(userId, stampedWorkspace);
+  return queue.workspace;
+}
+function queuePendingDay(userId, dateKey, day) {
+  const queuedAt = new Date().toISOString();
+  const queue = readPendingSync(userId);
+  queue.days[dateKey] = { dateKey, day: { ...day, updatedAt: queuedAt }, queuedAt };
+  writePendingSync(userId, queue);
+  return queue.days[dateKey];
+}
+function clearPendingWorkspace(userId, queuedAt) {
+  const queue = readPendingSync(userId);
+  if (queue.workspace?.queuedAt !== queuedAt) return false;
+  queue.workspace = null;
+  writePendingSync(userId, queue);
+  return true;
+}
+function clearPendingDay(userId, dateKey, queuedAt) {
+  const queue = readPendingSync(userId);
+  if (queue.days[dateKey]?.queuedAt !== queuedAt) return false;
+  delete queue.days[dateKey];
+  writePendingSync(userId, queue);
+  return true;
+}
+function parseTime(value) {
+  const time = Date.parse(value || "");
+  return Number.isFinite(time) ? time : 0;
+}
+function hasWorkspaceData(workspace = {}) {
+  return Boolean(
+    (workspace.habits || []).length ||
+    (workspace.reminders || []).length ||
+    (workspace.temptations || []).length ||
+    workspace.profile?.displayName ||
+    privacyIsEnabled(workspace.privacySettings || {})
+  );
+}
+function shouldApplyWorkspaceResponse(userId, queuedAt, workspace) {
+  const pending = readPendingSync(userId).workspace;
+  if (pending && pending.queuedAt !== queuedAt) return false;
+  const localTime = parseTime(readLocalWorkspace(userId).updatedAt);
+  const remoteTime = parseTime(workspace?.updatedAt);
+  return !localTime || !remoteTime || remoteTime >= localTime;
 }
 async function apiMessage(response, fallback) { try { const body = await response.json(); return body.detail || body.error || fallback; } catch { return fallback; } }
 function handleImageError(event) {
@@ -288,6 +378,7 @@ function longestStreak(grid,habits) { const today=dayforgeDate(); let best=0,run
 function focusScore(grid,days,habits) { if(!habits.length)return 0; const ms=buildMonthStats(grid,days,habits); const cs=Math.min(currentStreak(grid,habits)*3,30); return Math.min(100,Math.round(ms.pct*0.7+cs)); }
 
 function App() {
+  const authHeaderCache = useRef({});
   const [auth, setAuth] = useState(null);
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
@@ -318,7 +409,7 @@ function App() {
   const [reminderDraft, setReminderDraft] = useState({ title: "", date: dayforgeTodayKey(), time: "09:00", priority: "normal" });
   const [dailyExtras, setDailyExtras] = useState({});
   const [extraDraft, setExtraDraft] = useState("");
-  const [temptations, setTemptations] = useState(() => { try { return JSON.parse(localStorage.getItem("dayforge_temptations") || "[]"); } catch { return []; } });
+  const [temptations, setTemptations] = useState(() => readLegacyTemptations().map(normalizeTemptation).filter(Boolean));
   const [temptDraft, setTemptDraft] = useState("");
 
   const days = useMemo(() => monthDays(monthDate), [monthDate]);
@@ -331,10 +422,34 @@ function App() {
     const fa = initializeApp(CONFIG.firebase);
     const na = getAuth(fa);
     setAuth(na);
-    return onAuthStateChanged(na, u => { setUser(u); setAuthReady(true); setSyncState(u ? "Signed in" : "Sign in required"); });
+    return onAuthStateChanged(na, u => {
+      setUser(u);
+      setAuthReady(true);
+      setSyncState(u ? "Signed in" : "Sign in required");
+      if (!u) {
+        authHeaderCache.current = {};
+        return;
+      }
+      authHeaderCache.current = { "Content-Type": "application/json", "X-Demo-User": u.uid };
+      u.getIdToken()
+        .then(token => { authHeaderCache.current = { "Content-Type": "application/json", "X-Demo-User": u.uid, Authorization: `Bearer ${token}` }; })
+        .catch(() => {});
+    });
   }, []);
 
   useEffect(() => { document.body.dataset.theme = theme; localStorage.setItem("dayforge_theme", theme); }, [theme]);
+  useEffect(() => {
+    if (!user) return;
+    const storedTheme = normalizePreferences(readLocalWorkspace(user.uid).preferences || {}).theme;
+    if (storedTheme === theme) return;
+    const timer = window.setTimeout(() => {
+      saveWorkspaceState(
+        { theme },
+        { saved: "Theme saved", failed: "Theme save failed", local: "Theme saved locally, will sync" }
+      );
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [theme, user]);
 
   useEffect(() => {
     if (!user) {
@@ -348,6 +463,8 @@ function App() {
     const nextProfile = { ...localProfile, displayName: localProfile.displayName || defaultDisplayName(user) };
     const localSettings = localWorkspace.notificationSettings || {};
     const localHabits = (localWorkspace.habits || []).map(normalizeHabit).filter(h => !isLegacyDefaultHabit(h));
+    const localTemptations = ((localWorkspace.temptations || []).length ? localWorkspace.temptations : readLegacyTemptations()).map(normalizeTemptation).filter(Boolean);
+    const localPreferences = normalizePreferences(localWorkspace.preferences || {});
     const localPrivacy = newestPrivacySettings(localWorkspace.privacySettings || {}, readPrivacySettings(user.uid));
     const privacyEnabled = privacyIsEnabled(localPrivacy);
     setPrivacySettings(localPrivacy);
@@ -360,6 +477,9 @@ function App() {
     setProfileDraft(nextProfile.displayName || defaultDisplayName(user));
     setNotificationSettings(localSettings);
     setReminders((localWorkspace.reminders || []).map(normalizeReminder));
+    setTemptations(localTemptations);
+    writeLegacyTemptations(localTemptations);
+    if (localWorkspace.preferences?.theme) setTheme(localPreferences.theme);
     setHabits(localHabits);
     setGrid(readLocal(user.uid, monthId));
     setDailyExtras(readLocal(user.uid, `${monthId}_extras`));
@@ -381,10 +501,46 @@ function App() {
     const timer = window.setInterval(() => checkDueReminders(), 60000);
     return () => window.clearInterval(timer);
   }, [user, reminders.length]);
+  useEffect(() => {
+    if (!user) return;
+    const flushOnHide = () => {
+      const pending = readPendingSync(user.uid);
+      const headers = Object.keys(authHeaderCache.current || {}).length
+        ? authHeaderCache.current
+        : { "Content-Type": "application/json", "X-Demo-User": user.uid };
+      if (pending.workspace) {
+        const body = JSON.stringify({ workspace: pending.workspace.workspace });
+        fetch(`${apiBase()}/api/workspace`, {
+          method: "PUT",
+          headers,
+          body,
+          keepalive: body.length < 60000,
+        }).catch(() => {});
+      }
+      Object.entries(pending.days).forEach(([dateKey, item]) => {
+        const body = JSON.stringify({ day: item.day });
+        fetch(`${apiBase()}/api/days/${dateKey}`, {
+          method: "PUT",
+          headers,
+          body,
+          keepalive: body.length < 60000,
+        }).catch(() => {});
+      });
+    };
+    const flushWhenHidden = () => { if (document.visibilityState === "hidden") flushOnHide(); };
+    window.addEventListener("pagehide", flushOnHide);
+    document.addEventListener("visibilitychange", flushWhenHidden);
+    return () => {
+      window.removeEventListener("pagehide", flushOnHide);
+      document.removeEventListener("visibilitychange", flushWhenHidden);
+    };
+  }, [user]);
 
   async function authHeaders() {
     const h = { "Content-Type": "application/json", "X-Demo-User": user?.uid || "dayforge-local" };
-    if (auth?.currentUser) h.Authorization = `Bearer ${await auth.currentUser.getIdToken()}`;
+    const firebaseUser = auth?.currentUser || user;
+    if (firebaseUser?.getIdToken) h.Authorization = `Bearer ${await firebaseUser.getIdToken()}`;
+    authHeaderCache.current = h;
     return h;
   }
 
@@ -400,78 +556,230 @@ function App() {
     return cleanPrivacy;
   }
 
+  function buildWorkspace(overrides = {}) {
+    return workspaceFor(
+      user,
+      overrides.habits ?? habits,
+      overrides.reminders ?? reminders,
+      overrides.profile ?? profile,
+      overrides.notificationSettings ?? notificationSettings,
+      overrides.privacySettings ?? privacySettings,
+      {
+        temptations: overrides.temptations ?? temptations,
+        preferences: { theme: overrides.theme ?? theme },
+      }
+    );
+  }
+
+  function applyWorkspacePayload(workspace = {}) {
+    if (!user) return;
+    const nextHabits = (workspace.habits || []).map(normalizeHabit).filter(h => !isLegacyDefaultHabit(h));
+    const nextProfile = {
+      ...(workspace.profile || {}),
+      displayName: workspace.profile?.displayName || defaultDisplayName(user),
+    };
+    const nextSettings = {
+      ...(workspace.notificationSettings || {}),
+      email: workspace.notificationSettings?.email || user.email || "",
+      timezone: workspace.notificationSettings?.timezone || CONFIG.appTimezone,
+    };
+    const nextReminders = (workspace.reminders || []).map(normalizeReminder);
+    const nextTemptations = (workspace.temptations || []).map(normalizeTemptation).filter(Boolean);
+    const nextPreferences = normalizePreferences(workspace.preferences || { theme });
+
+    writeLocalWorkspace(user.uid, workspace);
+    setHabits(nextHabits);
+    setProfile(nextProfile);
+    setProfileDraft(nextProfile.displayName || defaultDisplayName(user));
+    setNotificationSettings(nextSettings);
+    setReminders(nextReminders);
+    setTemptations(nextTemptations);
+    writeLegacyTemptations(nextTemptations);
+    if (workspace.preferences?.theme) setTheme(nextPreferences.theme);
+    applyPrivacySettings(workspace.privacySettings || privacySettings);
+  }
+
+  async function putJson(path, body) {
+    const payload = JSON.stringify(body);
+    return fetch(`${apiBase()}${path}`, {
+      method: "PUT",
+      headers: await authHeaders(),
+      body: payload,
+      keepalive: payload.length < 60000,
+    });
+  }
+
+  async function saveWorkspaceState(overrides = {}, labels = {}) {
+    if (!user) return null;
+    const workspace = buildWorkspace(overrides);
+    const queued = queuePendingWorkspace(user.uid, workspace);
+    if (overrides.temptations) writeLegacyTemptations(overrides.temptations);
+    try {
+      const r = await putJson("/api/workspace", { workspace: queued.workspace });
+      if (!r.ok) throw new Error(await apiMessage(r, labels.failed || `Workspace save failed (${r.status})`));
+      const p = await r.json();
+      const canApply = p.workspace && shouldApplyWorkspaceResponse(user.uid, queued.queuedAt, p.workspace);
+      const cleared = clearPendingWorkspace(user.uid, queued.queuedAt);
+      if (cleared && canApply) applyWorkspacePayload(p.workspace);
+      setSyncState(labels.saved || `Workspace saved: ${p.store || "backend"}`);
+      return p;
+    } catch (error) {
+      setSyncState(labels.local || `Saved locally, will sync: ${error.message}`);
+      return null;
+    }
+  }
+
+  function extrasFromDay(day = {}, habitIds = new Set()) {
+    const tasks = Array.isArray(day.tasks) ? day.tasks : [];
+    return tasks
+      .filter(task => task && !habitIds.has(String(task.id)) && !habitIds.has(String(task.habitId)))
+      .map(normalizeExtraItem)
+      .filter(Boolean);
+  }
+
+  async function flushPendingSync() {
+    if (!user) return true;
+    const pending = readPendingSync(user.uid);
+    let synced = 0;
+    let failed = 0;
+
+    if (pending.workspace) {
+      try {
+        const r = await putJson("/api/workspace", { workspace: pending.workspace.workspace });
+        if (!r.ok) throw new Error(await apiMessage(r, `Workspace save failed (${r.status})`));
+        const p = await r.json();
+        const canApply = p.workspace && shouldApplyWorkspaceResponse(user.uid, pending.workspace.queuedAt, p.workspace);
+        const cleared = clearPendingWorkspace(user.uid, pending.workspace.queuedAt);
+        if (cleared) {
+          synced += 1;
+          if (canApply) applyWorkspacePayload(p.workspace);
+        }
+      } catch {
+        failed += 1;
+      }
+    }
+
+    const dayEntries = Object.entries(readPendingSync(user.uid).days);
+    for (const [dateKey, item] of dayEntries) {
+      try {
+        const r = await putJson(`/api/days/${dateKey}`, { day: item.day });
+        if (!r.ok) throw new Error(await apiMessage(r, `Day save failed (${r.status})`));
+        if (clearPendingDay(user.uid, dateKey, item.queuedAt)) synced += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+
+    if (synced) setSyncState(`Synced ${synced} pending change${synced === 1 ? "" : "s"}`);
+    return failed === 0;
+  }
+
   async function syncFromBackend() {
     if (!user) return;
     try {
       setSyncState("Syncing...");
+      await flushPendingSync();
       const r = await fetch(`${apiBase()}/api/snapshot?year=${monthDate.getFullYear()}`, { headers: await authHeaders() });
       if (!r.ok) throw new Error(await apiMessage(r, `Snapshot failed (${r.status})`));
       const p = await r.json();
-      const wh = (p.workspace?.habits || []).map(normalizeHabit).filter(h => !isLegacyDefaultHabit(h));
-      const syncedHabits = wh.length ? wh : trackedHabits;
-      if (wh.length) {
-        setHabits(wh);
-        writeLocalWorkspace(user.uid, { ...(p.workspace || {}), habits: wh });
+      const remoteWorkspace = p.workspace || {};
+      const localWorkspace = readLocalWorkspace(user.uid);
+      const pending = readPendingSync(user.uid);
+      let workspaceForMonth = pending.workspace?.workspace || remoteWorkspace;
+
+      if (pending.workspace) {
+        applyWorkspacePayload(pending.workspace.workspace);
+      } else if (!hasWorkspaceData(remoteWorkspace) && hasWorkspaceData(localWorkspace)) {
+        const localPrivacy = newestPrivacySettings(localWorkspace.privacySettings || {}, readPrivacySettings(user.uid));
+        const localTemptations = ((localWorkspace.temptations || []).length ? localWorkspace.temptations : readLegacyTemptations()).map(normalizeTemptation).filter(Boolean);
+        const saved = await saveWorkspaceState({
+          habits: (localWorkspace.habits || []).map(normalizeHabit).filter(h => !isLegacyDefaultHabit(h)),
+          reminders: (localWorkspace.reminders || []).map(normalizeReminder),
+          profile: localWorkspace.profile || {},
+          notificationSettings: localWorkspace.notificationSettings || {},
+          privacySettings: localPrivacy,
+          temptations: localTemptations,
+          theme: normalizePreferences(localWorkspace.preferences || {}).theme,
+        }, { saved: "Local workspace synced", local: "Local workspace queued for sync" });
+        workspaceForMonth = saved?.workspace || readLocalWorkspace(user.uid);
+        if (!saved?.workspace) applyWorkspacePayload(workspaceForMonth);
+      } else {
+        const localPrivacy = newestPrivacySettings(localWorkspace.privacySettings || {}, readPrivacySettings(user.uid));
+        const remotePrivacy = remoteWorkspace.privacySettings || {};
+        const nextPrivacy = newestPrivacySettings(localPrivacy, remotePrivacy);
+        workspaceForMonth = { ...remoteWorkspace, privacySettings: nextPrivacy };
+        applyWorkspacePayload(workspaceForMonth);
+        if (privacyUpdatedAt(nextPrivacy) > privacyUpdatedAt(remotePrivacy)) {
+          await saveWorkspaceState({
+            habits: (workspaceForMonth.habits || []).map(normalizeHabit).filter(h => !isLegacyDefaultHabit(h)),
+            reminders: (workspaceForMonth.reminders || []).map(normalizeReminder),
+            profile: workspaceForMonth.profile || {},
+            notificationSettings: workspaceForMonth.notificationSettings || {},
+            privacySettings: nextPrivacy,
+            temptations: (workspaceForMonth.temptations || []).map(normalizeTemptation).filter(Boolean),
+            theme: normalizePreferences(workspaceForMonth.preferences || {}).theme,
+          }, { saved: "Privacy synced", local: "Privacy queued for sync" });
+        }
       }
-      const remoteProfile = p.workspace?.profile || {};
-      const nextProfile = { ...profile, ...remoteProfile, displayName: remoteProfile.displayName || profile.displayName || defaultDisplayName(user) };
-      const nextSettings = {
-        ...notificationSettings,
-        ...(p.workspace?.notificationSettings || {}),
-        email: p.workspace?.notificationSettings?.email || user.email || notificationSettings.email || "",
-        timezone: p.workspace?.notificationSettings?.timezone || CONFIG.appTimezone,
-      };
-      setProfile(nextProfile);
-      setProfileDraft(nextProfile.displayName || defaultDisplayName(user));
-      setNotificationSettings(nextSettings);
-      setReminders((p.workspace?.reminders || []).map(normalizeReminder));
-      const localPrivacy = newestPrivacySettings(readLocalWorkspace(user.uid).privacySettings || {}, readPrivacySettings(user.uid));
-      const remotePrivacy = p.workspace?.privacySettings || {};
-      const nextPrivacy = newestPrivacySettings(localPrivacy, remotePrivacy);
-      applyPrivacySettings(nextPrivacy, privacyIsEnabled(nextPrivacy) && !privacyReady);
-      if (privacyUpdatedAt(nextPrivacy) > privacyUpdatedAt(remotePrivacy)) {
-        const mergedWorkspace = workspaceFor(user, wh.length ? wh : habits, p.workspace?.reminders || reminders, nextProfile, nextSettings, nextPrivacy);
-        fetch(`${apiBase()}/api/workspace`, {
-          method: "PUT",
-          headers: await authHeaders(),
-          body: JSON.stringify({ workspace: mergedWorkspace })
-        }).catch(() => {});
-      }
+
+      const syncedHabits = (workspaceForMonth.habits || []).map(normalizeHabit).filter(h => !isLegacyDefaultHabit(h));
       const ng = {};
       const nextExtras = {};
       const habitIds = new Set(syncedHabits.map(h => h.id));
+      const localGrid = readLocal(user.uid, monthId);
+      const localExtras = readLocal(user.uid, `${monthId}_extras`);
+      const currentPendingDays = readPendingSync(user.uid).days;
+      const daysToUpload = [];
       days.forEach(d => {
         const k = toDateKey(d);
-        ng[k] = p.days?.[k]?.habitChecks || {};
-        const tasks = Array.isArray(p.days?.[k]?.tasks) ? p.days[k].tasks : [];
-        const extras = tasks.filter(task => task && !habitIds.has(String(task.id)) && !habitIds.has(String(task.habitId))).map(normalizeExtraItem).filter(Boolean);
+        const pendingDay = currentPendingDays[k]?.day;
+        const remoteDay = p.days?.[k];
+        if (pendingDay) {
+          ng[k] = pendingDay.habitChecks || localGrid[k] || {};
+          const extras = extrasFromDay(pendingDay, habitIds);
+          if (extras.length) nextExtras[k] = extras;
+          else if ((localExtras[k] || []).length) nextExtras[k] = (localExtras[k] || []).map(normalizeExtraItem).filter(Boolean);
+          return;
+        }
+        if (remoteDay) {
+          ng[k] = remoteDay.habitChecks || {};
+          const extras = extrasFromDay(remoteDay, habitIds);
+          if (extras.length) nextExtras[k] = extras;
+          return;
+        }
+        const checks = localGrid[k] || {};
+        const extras = (localExtras[k] || []).map(normalizeExtraItem).filter(Boolean);
+        ng[k] = checks;
         if (extras.length) nextExtras[k] = extras;
+        if (Object.keys(checks).length || extras.length) {
+          daysToUpload.push({ dateKey: k, checks, extras });
+        }
       });
-      setGrid(c => ({ ...ng, ...c }));
-      setDailyExtras(c => ({ ...nextExtras, ...c }));
-      setSyncState(`Backend connected: ${p.primaryStore || "backend"}`);
+      setGrid(ng);
+      setDailyExtras(nextExtras);
+      daysToUpload.forEach(({ dateKey, checks, extras }) => {
+        const extrasByDay = { ...localExtras, [dateKey]: extras };
+        const day = buildDayPayload(dateKey, checks, extrasByDay, syncedHabits);
+        const queued = queuePendingDay(user.uid, dateKey, day);
+        putJson(`/api/days/${dateKey}`, { day: queued.day })
+          .then(async dayResponse => {
+            if (!dayResponse.ok) throw new Error(await apiMessage(dayResponse, `Day save failed (${dayResponse.status})`));
+            clearPendingDay(user.uid, dateKey, queued.queuedAt);
+          })
+          .catch(() => {});
+      });
+      const remaining = readPendingSync(user.uid);
+      const remainingCount = (remaining.workspace ? 1 : 0) + Object.keys(remaining.days).length;
+      setSyncState(remainingCount ? `Backend connected, ${remainingCount} change${remainingCount === 1 ? "" : "s"} pending` : `Backend connected: ${p.primaryStore || "backend"}`);
     } catch (error) { setPrivacyReady(true); setSyncState(`Backend offline: ${error.message}`); }
   }
 
   async function saveWorkspace(nh) {
     if (!user) return;
-    const workspace = workspaceFor(user, nh, reminders, profile, notificationSettings, privacySettings);
-    writeLocalWorkspace(user.uid, workspace);
-    try {
-      const r = await fetch(`${apiBase()}/api/workspace`, {
-        method: "PUT", headers: await authHeaders(),
-        body: JSON.stringify({ workspace })
-      });
-      if (!r.ok) throw new Error(await apiMessage(r, `Workspace save failed (${r.status})`));
-      const p = await r.json();
-      if (p.workspace) {
-        writeLocalWorkspace(user.uid, p.workspace);
-        setProfile(p.workspace.profile || workspace.profile);
-        setNotificationSettings(p.workspace.notificationSettings || workspace.notificationSettings);
-        applyPrivacySettings(p.workspace.privacySettings || workspace.privacySettings);
-      }
-      setSyncState(`Habits saved: ${p.store || "backend"}`);
-    } catch (error) { setSyncState(`Saved locally: ${error.message}`); }
+    await saveWorkspaceState(
+      { habits: nh },
+      { saved: "Habits saved", failed: "Workspace save failed", local: "Habits saved locally, will sync" }
+    );
   }
 
   async function sendWelcomeEmail() {
@@ -488,12 +796,24 @@ function App() {
     } catch (error) { setWelcomeState(`Welcome failed: ${error.message}`); }
   }
 
-  function tasksForDay(dk, checks, extrasByDay = dailyExtras) {
+  function habitsForDayKey(dk, sourceHabits = trackedHabits) {
+    return habitsForDate(sourceHabits, dk).filter(h => h.active);
+  }
+
+  function tasksForDay(dk, checks, extrasByDay = dailyExtras, sourceHabits = trackedHabits) {
     const extras = (extrasByDay[dk] || []).map(normalizeExtraItem).filter(Boolean);
+    const dayHabits = habitsForDayKey(dk, sourceHabits);
     return [
-      ...activeHabits.map(h => ({ id: h.id, title: h.title, text: h.title, done: Boolean(checks[h.id]), priority: "medium", habitId: h.id, estimateMins: 20 })),
+      ...dayHabits.map(h => ({ id: h.id, title: h.title, text: h.title, done: Boolean(checks[h.id]), priority: "medium", habitId: h.id, estimateMins: 20 })),
       ...extras.map(item => ({ ...item, estimateMins: item.priority === "high" ? 45 : 25 })),
     ];
+  }
+
+  function buildDayPayload(dk, checks, extrasByDay = dailyExtras, sourceHabits = trackedHabits) {
+    const dayHabits = habitsForDayKey(dk, sourceHabits);
+    const done = dayHabits.filter(h => checks[h.id]).length;
+    const status = done === dayHabits.length && dayHabits.length ? "won" : done > 0 ? "neutral" : "missed";
+    return { dateKey: dk, status, focusLine: quote, habitChecks: checks, tasks: tasksForDay(dk, checks, extrasByDay, sourceHabits) };
   }
 
   function canEditDay(dk) {
@@ -511,16 +831,14 @@ function App() {
       showDayLocked(dk);
       return;
     }
+    const day = buildDayPayload(dk, checks, extrasByDay);
+    const queued = queuePendingDay(user.uid, dk, day);
     try {
-      const done = activeHabits.filter(h => checks[h.id]).length;
-      const status = done === activeHabits.length ? "won" : done > 0 ? "neutral" : "missed";
-      const r = await fetch(`${apiBase()}/api/days/${dk}`, {
-        method: "PUT", headers: await authHeaders(),
-        body: JSON.stringify({ day: { dateKey: dk, status, focusLine: quote, habitChecks: checks, tasks: tasksForDay(dk, checks, extrasByDay) } })
-      });
+      const r = await putJson(`/api/days/${dk}`, { day: queued.day });
       if (!r.ok) throw new Error(await apiMessage(r, `Day save failed (${r.status})`));
+      clearPendingDay(user.uid, dk, queued.queuedAt);
       setSyncState("Day saved");
-    } catch (error) { setSyncState(`Saved locally: ${error.message}`); }
+    } catch (error) { setSyncState(`Saved locally, will sync: ${error.message}`); }
   }
 
   function toggleHabit(dk, hid) {
@@ -605,25 +923,22 @@ function App() {
     saveWorkspaceWithReminders(nr);
   }
 
+  function saveTemptationList(next) {
+    const clean = next.map(normalizeTemptation).filter(Boolean).slice(0, 50);
+    setTemptations(clean);
+    writeLegacyTemptations(clean);
+    saveWorkspaceState(
+      { temptations: clean },
+      { saved: "Temptations saved", failed: "Temptation save failed", local: "Temptations saved locally, will sync" }
+    );
+  }
+
   async function saveWorkspaceWithReminders(nr) {
     if (!user) return;
-    const workspace = workspaceFor(user, habits, nr, profile, notificationSettings, privacySettings);
-    writeLocalWorkspace(user.uid, workspace);
-    try {
-      const r = await fetch(`${apiBase()}/api/workspace`, {
-        method: "PUT", headers: await authHeaders(),
-        body: JSON.stringify({ workspace })
-      });
-      if (!r.ok) throw new Error(await apiMessage(r, `Save failed (${r.status})`));
-      const p = await r.json();
-      if (p.workspace) {
-        writeLocalWorkspace(user.uid, p.workspace);
-        setProfile(p.workspace.profile || workspace.profile);
-        setNotificationSettings(p.workspace.notificationSettings || workspace.notificationSettings);
-        applyPrivacySettings(p.workspace.privacySettings || workspace.privacySettings);
-      }
-      setSyncState("Reminders saved");
-    } catch (error) { setSyncState(`Saved locally: ${error.message}`); }
+    await saveWorkspaceState(
+      { reminders: nr },
+      { saved: "Reminders saved", failed: "Save failed", local: "Reminders saved locally, will sync" }
+    );
   }
 
   async function saveProfileName(e) {
@@ -632,27 +947,12 @@ function App() {
     const name = profileDraft.trim();
     if (!name) return;
     const nextProfile = { ...profile, displayName: name };
-    const workspace = workspaceFor(user, habits, reminders, nextProfile, notificationSettings, privacySettings);
     setProfile(nextProfile);
     setProfileEditing(false);
-    writeLocalWorkspace(user.uid, workspace);
-    try {
-      const r = await fetch(`${apiBase()}/api/workspace`, {
-        method: "PUT", headers: await authHeaders(),
-        body: JSON.stringify({ workspace })
-      });
-      if (!r.ok) throw new Error(await apiMessage(r, `Profile save failed (${r.status})`));
-      const p = await r.json();
-      if (p.workspace) {
-        writeLocalWorkspace(user.uid, p.workspace);
-        setProfile(p.workspace.profile || workspace.profile);
-        setNotificationSettings(p.workspace.notificationSettings || workspace.notificationSettings);
-        applyPrivacySettings(p.workspace.privacySettings || workspace.privacySettings);
-      }
-      setSyncState("Profile saved");
-    } catch (error) {
-      setSyncState(`Profile saved locally: ${error.message}`);
-    }
+    await saveWorkspaceState(
+      { profile: nextProfile },
+      { saved: "Profile saved", failed: "Profile save failed", local: "Profile saved locally, will sync" }
+    );
   }
 
   async function checkDueReminders(force = false) {
@@ -717,25 +1017,10 @@ function App() {
 
   async function savePrivacySettings(nextPrivacy) {
     if (!user) return;
-    const workspace = workspaceFor(user, habits, reminders, profile, notificationSettings, nextPrivacy);
-    const cached = { ...readLocalWorkspace(user.uid), ...workspace };
-    writeLocalWorkspace(user.uid, cached);
-    try {
-      const r = await fetch(`${apiBase()}/api/workspace`, {
-        method: "PUT",
-        headers: await authHeaders(),
-        body: JSON.stringify({ workspace })
-      });
-      if (!r.ok) throw new Error(await apiMessage(r, `Privacy save failed (${r.status})`));
-      const p = await r.json();
-      if (p.workspace) {
-        writeLocalWorkspace(user.uid, p.workspace);
-        applyPrivacySettings(p.workspace.privacySettings || nextPrivacy);
-      }
-      setSyncState("Privacy saved");
-    } catch (error) {
-      setSyncState(`Privacy saved locally: ${error.message}`);
-    }
+    await saveWorkspaceState(
+      { privacySettings: nextPrivacy },
+      { saved: "Privacy saved", failed: "Privacy save failed", local: "Privacy saved locally, will sync" }
+    );
   }
 
   async function unlockPrivacy(e) {
@@ -1020,18 +1305,16 @@ function App() {
             e.preventDefault();
             const t = temptDraft.trim(); if (!t) return;
             const next = [{ id: uid(), label: t, resisted: true, time: new Date().toISOString() }, ...temptations].slice(0, 50);
-            setTemptations(next); setTemptDraft("");
-            localStorage.setItem("dayforge_temptations", JSON.stringify(next));
+            setTemptDraft("");
+            saveTemptationList(next);
           }}
           onToggle={(id) => {
             const next = temptations.map(item => item.id === id ? { ...item, resisted: !item.resisted } : item);
-            setTemptations(next);
-            localStorage.setItem("dayforge_temptations", JSON.stringify(next));
+            saveTemptationList(next);
           }}
           onDelete={(id) => {
             const next = temptations.filter(item => item.id !== id);
-            setTemptations(next);
-            localStorage.setItem("dayforge_temptations", JSON.stringify(next));
+            saveTemptationList(next);
           }}
         />
         <ReminderCard reminders={reminders} draft={reminderDraft} setDraft={setReminderDraft} onAdd={addReminder} onDelete={deleteReminder} status={reminderState} />

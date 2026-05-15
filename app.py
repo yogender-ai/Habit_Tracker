@@ -425,14 +425,16 @@ def normalize_habit(habit):
     title = clean_text(habit.get("title"), 90)
     if not title:
         return None
+    active = habit.get("active", True) is not False
     return {
         "id": clean_id(habit.get("id")),
         "title": title,
         "category": clean_text(habit.get("category"), 40) or "focus",
         "goalId": clean_text(habit.get("goalId"), 80),
         "targetPerWeek": clamp_number(habit.get("targetPerWeek"), 1, 7, 5),
-        "active": habit.get("active", True) is not False,
+        "active": active,
         "createdAt": clean_text(habit.get("createdAt") or utc_now().isoformat(), 40),
+        "deletedAt": clean_text(habit.get("deletedAt") or (habit.get("updatedAt") if not active else ""), 40),
     }
 
 
@@ -457,6 +459,24 @@ def normalize_reminder(reminder):
         "createdAt": clean_text(reminder.get("createdAt") or utc_now().isoformat(), 40),
         "updatedAt": clean_text(reminder.get("updatedAt") or utc_now().isoformat(), 40),
     }
+
+
+def normalize_temptation(item):
+    label = clean_text(item.get("label") or item.get("title"), 80)
+    if not label:
+        return None
+    return {
+        "id": clean_id(item.get("id")),
+        "label": label,
+        "resisted": item.get("resisted", True) is not False,
+        "time": clean_text(item.get("time") or item.get("createdAt") or utc_now().isoformat(), 40),
+    }
+
+
+def normalize_preferences(preferences):
+    preferences = preferences if isinstance(preferences, dict) else {}
+    theme = preferences.get("theme") if preferences.get("theme") in {"dark", "light"} else "dark"
+    return {"theme": theme}
 
 
 def normalize_privacy_settings(settings):
@@ -486,6 +506,7 @@ def normalize_workspace(payload):
     recovery = payload.get("recovery") if isinstance(payload.get("recovery"), dict) else {}
     settings = payload.get("notificationSettings") if isinstance(payload.get("notificationSettings"), dict) else {}
     privacy_settings = payload.get("privacySettings") if isinstance(payload.get("privacySettings"), dict) else {}
+    preferences = payload.get("preferences") if isinstance(payload.get("preferences"), dict) else {}
 
     goals = []
     for goal in payload.get("goals", [])[:24]:
@@ -508,6 +529,13 @@ def normalize_workspace(payload):
             if normalized:
                 reminders.append(normalized)
 
+    temptations = []
+    for item in payload.get("temptations", [])[:50]:
+        if isinstance(item, dict):
+            normalized = normalize_temptation(item)
+            if normalized:
+                temptations.append(normalized)
+
     return {
         "profile": {
             "displayName": clean_text(profile.get("displayName"), 80),
@@ -524,6 +552,8 @@ def normalize_workspace(payload):
         "goals": goals,
         "habits": habits,
         "reminders": reminders,
+        "temptations": temptations,
+        "preferences": normalize_preferences(preferences),
         "notificationSettings": {
             "enabled": bool(settings.get("enabled")),
             "email": clean_text(settings.get("email"), 180),
