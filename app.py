@@ -34,6 +34,7 @@ Base = declarative_base()
 PRIORITIES = {"low", "medium", "high"}
 DAY_STATUSES = {"neutral", "won", "missed"}
 REMINDER_CATEGORIES = {"focus", "meeting", "contest", "health", "recovery", "learning", "personal"}
+REMINDER_PRIORITIES = {"normal", "high"}
 
 
 def utc_now():
@@ -440,6 +441,7 @@ def normalize_reminder(reminder):
     if not title:
         return None
     category = reminder.get("category") if reminder.get("category") in REMINDER_CATEGORIES else "focus"
+    priority = reminder.get("priority") if reminder.get("priority") in REMINDER_PRIORITIES else "normal"
     return {
         "id": clean_id(reminder.get("id")),
         "title": title,
@@ -447,6 +449,7 @@ def normalize_reminder(reminder):
         "date": clean_date(reminder.get("date")) or today_key(),
         "time": clean_time(reminder.get("time"), "09:00"),
         "category": category,
+        "priority": priority,
         "goalId": clean_text(reminder.get("goalId"), 80),
         "notify": reminder.get("notify", True) is not False,
         "done": bool(reminder.get("done")),
@@ -456,11 +459,33 @@ def normalize_reminder(reminder):
     }
 
 
+def normalize_privacy_settings(settings):
+    settings = settings if isinstance(settings, dict) else {}
+    salt = re.sub(r"[^a-fA-F0-9]", "", clean_text(settings.get("salt"), 128))[:64]
+    pin_hash = re.sub(r"[^a-fA-F0-9]", "", clean_text(settings.get("pinHash"), 128))[:128]
+    enabled = bool(settings.get("enabled")) and bool(salt and pin_hash)
+    updated_at = clean_text(settings.get("updatedAt"), 40)
+    if not enabled and not updated_at:
+        return {
+            "enabled": False,
+            "salt": "",
+            "pinHash": "",
+            "updatedAt": "",
+        }
+    return {
+        "enabled": enabled,
+        "salt": salt,
+        "pinHash": pin_hash,
+        "updatedAt": updated_at or utc_now().isoformat(),
+    }
+
+
 def normalize_workspace(payload):
     payload = payload if isinstance(payload, dict) else {}
     profile = payload.get("profile") if isinstance(payload.get("profile"), dict) else {}
     recovery = payload.get("recovery") if isinstance(payload.get("recovery"), dict) else {}
     settings = payload.get("notificationSettings") if isinstance(payload.get("notificationSettings"), dict) else {}
+    privacy_settings = payload.get("privacySettings") if isinstance(payload.get("privacySettings"), dict) else {}
 
     goals = []
     for goal in payload.get("goals", [])[:24]:
@@ -513,6 +538,7 @@ def normalize_workspace(payload):
             "lastEveningReviewKey": clean_text(settings.get("lastEveningReviewKey"), 20),
             "lastRelapseShieldKey": clean_text(settings.get("lastRelapseShieldKey"), 20),
         },
+        "privacySettings": normalize_privacy_settings(privacy_settings),
         "updatedAt": clean_text(payload.get("updatedAt") or utc_now().isoformat(), 40),
     }
 
@@ -889,6 +915,7 @@ async def send_my_due_notifications(
 
     local_now = local_dt_for(settings)
     sent = 0
+    sent_reminders = []
     failures = []
     changed = settings != previous_settings
 
@@ -900,14 +927,16 @@ async def send_my_due_notifications(
             continue
 
         try:
+            is_high_priority = reminder.get("priority") == "high"
             resend.send_email(
                 email_address,
-                f"Reminder: {reminder['title']}",
+                f"{'Priority reminder' if is_high_priority else 'Reminder'}: {reminder['title']}",
                 notification_html(
-                    reminder["title"],
-                    reminder.get("notes") or "This is the thing future-you asked current-you to remember.",
+                    f"{'Priority: ' if is_high_priority else ''}{reminder['title']}",
+                    reminder.get("notes") or ("This one is marked high priority. Handle it before the day gets noisy." if is_high_priority else "This is the thing future-you asked current-you to remember."),
                     [
                         f"Time: {reminder['date']} at {reminder['time']}",
+                        f"Priority: {reminder.get('priority', 'normal')}",
                         f"Category: {reminder.get('category', 'focus')}",
                         "Open DayForge and mark the next step done.",
                     ],
@@ -916,6 +945,13 @@ async def send_my_due_notifications(
             reminder["lastNotifiedKey"] = notify_key
             reminder["updatedAt"] = utc_now().isoformat()
             sent += 1
+            sent_reminders.append({
+                "id": reminder.get("id"),
+                "title": reminder.get("title"),
+                "date": reminder.get("date"),
+                "time": reminder.get("time"),
+                "priority": reminder.get("priority", "normal"),
+            })
             changed = True
         except RuntimeError as exc:
             failures.append({"userId": user["uid"], "error": str(exc)})
@@ -927,7 +963,7 @@ async def send_my_due_notifications(
         except RuntimeError as exc:
             failures.append({"userId": user["uid"], "error": str(exc)})
 
-    return {"ok": not failures, "sent": sent, "skipped": 0, "failures": failures[:10], "workspace": workspace}
+    return {"ok": not failures, "sent": sent, "sentReminders": sent_reminders, "skipped": 0, "failures": failures[:10], "workspace": workspace}
 
 
 @app.post("/api/notifications/due")
@@ -939,6 +975,7 @@ async def send_due_notifications(
 
     sent = 0
     skipped = 0
+    sent_reminders = []
     failures = []
 
     for item in storage.list_workspaces():
@@ -962,14 +999,16 @@ async def send_due_notifications(
                 continue
 
             try:
+                is_high_priority = reminder.get("priority") == "high"
                 resend.send_email(
                     email_address,
-                    f"Reminder: {reminder['title']}",
+                    f"{'Priority reminder' if is_high_priority else 'Reminder'}: {reminder['title']}",
                     notification_html(
-                        reminder["title"],
-                        reminder.get("notes") or "This is the thing future-you asked current-you to remember.",
+                        f"{'Priority: ' if is_high_priority else ''}{reminder['title']}",
+                        reminder.get("notes") or ("This one is marked high priority. Handle it before the day gets noisy." if is_high_priority else "This is the thing future-you asked current-you to remember."),
                         [
                             f"Time: {reminder['date']} at {reminder['time']}",
+                            f"Priority: {reminder.get('priority', 'normal')}",
                             f"Category: {reminder.get('category', 'focus')}",
                             "Open DayForge and mark the next step done.",
                         ],
@@ -977,6 +1016,14 @@ async def send_due_notifications(
                 )
                 reminder["lastNotifiedKey"] = notify_key
                 sent += 1
+                sent_reminders.append({
+                    "userId": user_id,
+                    "id": reminder.get("id"),
+                    "title": reminder.get("title"),
+                    "date": reminder.get("date"),
+                    "time": reminder.get("time"),
+                    "priority": reminder.get("priority", "normal"),
+                })
                 changed = True
             except RuntimeError as exc:
                 failures.append({"userId": user_id, "error": str(exc)})
@@ -1052,7 +1099,7 @@ async def send_due_notifications(
             except RuntimeError as exc:
                 failures.append({"userId": user_id, "error": str(exc)})
 
-    return {"ok": not failures, "sent": sent, "skipped": skipped, "failures": failures[:10]}
+    return {"ok": not failures, "sent": sent, "sentReminders": sent_reminders[:20], "skipped": skipped, "failures": failures[:10]}
 
 
 @app.get("/")

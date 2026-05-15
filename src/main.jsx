@@ -21,6 +21,7 @@ const CONFIG = {
   appTimezone: RUNTIME_CONFIG.appTimezone || VITE_ENV.VITE_APP_TIMEZONE || "Asia/Kolkata",
   firebase: { ...ENV_FIREBASE, ...(RUNTIME_CONFIG.firebase || {}) }
 };
+const DAY_START_HOUR = Math.max(0, Math.min(23, Number(RUNTIME_CONFIG.dayStartHour || VITE_ENV.VITE_DAY_START_HOUR || 6)));
 const LOCAL_HERO_IMAGE = "/dayforge-visual.svg";
 
 const QUOTES = [
@@ -132,6 +133,8 @@ const HERO_IMAGES = [
 
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 function toDateKey(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+function dayforgeDate(now = new Date()) { const d = new Date(now); if (d.getHours() < DAY_START_HOUR) d.setDate(d.getDate() - 1); d.setHours(0,0,0,0); return d; }
+function dayforgeTodayKey(now = new Date()) { return toDateKey(dayforgeDate(now)); }
 function monthKey(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; }
 function monthDays(d) { const y=d.getFullYear(),m=d.getMonth(),t=new Date(y,m+1,0).getDate(); return Array.from({length:t},(_,i)=>new Date(y,m,i+1)); }
 function uid() { return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`; }
@@ -145,12 +148,33 @@ function apiBase() { const c=String(CONFIG.apiBaseUrl||"").trim().replace(/\/$/,
 function hasFirebaseConfig() { const f=CONFIG.firebase||{}; return Boolean(f.apiKey&&f.authDomain&&f.projectId&&f.appId); }
 function normalizeHabit(h) { return { id:String(h.id||uid()), title:String(h.title||"New habit").slice(0,90), category:String(h.category||"Focus").slice(0,40), targetPerWeek:Math.max(1,Math.min(7,Number(h.targetPerWeek||h.target||5))), active:h.active!==false, createdAt:h.createdAt||new Date().toISOString() }; }
 function isLegacyDefaultHabit(h) { return LEGACY_DEFAULT_HABIT_IDS.has(String(h.id || "")); }
+function privacyIsEnabled(settings = {}) { return Boolean(settings.enabled && settings.pinHash && settings.salt); }
+function normalizePrivacySettings(settings = {}) {
+  return {
+    enabled: privacyIsEnabled(settings),
+    salt: String(settings.salt || ""),
+    pinHash: String(settings.pinHash || ""),
+    updatedAt: settings.updatedAt || "",
+  };
+}
+function privacyUpdatedAt(settings = {}) {
+  const time = Date.parse(settings.updatedAt || "");
+  return Number.isFinite(time) ? time : 0;
+}
+function newestPrivacySettings(localSettings = {}, remoteSettings = {}) {
+  const local = normalizePrivacySettings(localSettings);
+  const remote = normalizePrivacySettings(remoteSettings);
+  if (!remote.updatedAt && !remote.pinHash) return local;
+  if (!local.updatedAt && !local.pinHash) return remote;
+  return privacyUpdatedAt(remote) >= privacyUpdatedAt(local) ? remote : local;
+}
 function defaultDisplayName(user) {
   const raw = user?.displayName || user?.email?.split("@")[0] || "Champion";
   return String(raw).trim() || "Champion";
 }
-function workspaceFor(user, habits, reminders = [], profile = {}, settings = {}) {
+function workspaceFor(user, habits, reminders = [], profile = {}, settings = {}, privacy = {}) {
   const email = settings.email || user?.email || "";
+  const cleanPrivacy = normalizePrivacySettings(privacy);
   return {
     profile: {
       ...profile,
@@ -164,7 +188,8 @@ function workspaceFor(user, habits, reminders = [], profile = {}, settings = {})
       enabled: Boolean(email),
       email,
       timezone: settings.timezone || CONFIG.appTimezone,
-    }
+    },
+    privacySettings: cleanPrivacy,
   };
 }
 async function apiMessage(response, fallback) { try { const body = await response.json(); return body.detail || body.error || fallback; } catch { return fallback; } }
@@ -177,7 +202,7 @@ function handleImageError(event) {
 function prettyReminderDate(value) {
   const date = new Date(`${value}T00:00:00`);
   if (Number.isNaN(date.getTime())) return value;
-  const today = toDateKey(new Date());
+  const today = dayforgeTodayKey();
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   if (value === today) return "Today";
@@ -191,6 +216,33 @@ function prettyReminderTime(value) {
   return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 function reminderStamp(reminder) { return `${reminder.date || ""}T${reminder.time || "00:00"}`; }
+function normalizeExtraItem(item = {}) {
+  const title = String(item.title || item.text || "").trim().slice(0, 90);
+  if (!title) return null;
+  return {
+    id: String(item.id || uid()),
+    title,
+    text: title,
+    done: Boolean(item.done),
+    priority: ["low", "medium", "high"].includes(item.priority) ? item.priority : "medium",
+    createdAt: item.createdAt || new Date().toISOString(),
+  };
+}
+function normalizeReminder(reminder = {}) {
+  return {
+    id: String(reminder.id || uid()),
+    title: String(reminder.title || "Reminder").trim().slice(0, 120),
+    date: reminder.date || dayforgeTodayKey(),
+    time: reminder.time || "09:00",
+    category: reminder.category || "focus",
+    priority: reminder.priority === "high" ? "high" : "normal",
+    notify: reminder.notify !== false,
+    done: Boolean(reminder.done),
+    lastNotifiedKey: reminder.lastNotifiedKey || "",
+    createdAt: reminder.createdAt || new Date().toISOString(),
+    updatedAt: reminder.updatedAt || new Date().toISOString(),
+  };
+}
 function pinDigits(value) { return String(value || "").replace(/\D/g, "").slice(0, 4); }
 function randomSalt() {
   const bytes = new Uint8Array(16);
@@ -218,16 +270,16 @@ function dayStats(checks={}, habits=[]) { const t=habits.length||1, d=habits.fil
 function buildMonthStats(grid,days,habits) { const daily=days.map(d=>dayStats(grid[toDateKey(d)]||{},habits)); const done=daily.reduce((s,i)=>s+i.done,0); const total=daily.reduce((s,i)=>s+i.total,0)||1; return {daily,done,total,pct:Math.round((done/total)*100)}; }
 function buildWeeklyStats(grid,days,habits) { const chunks=[]; for(let i=0;i<days.length;i+=7) chunks.push(days.slice(i,i+7)); return chunks.map((c,i)=>{const s=buildMonthStats(grid,c,habits); const f=c[0],l=c[c.length-1]; return {...s,label:`Week ${i+1}`,range:`${f.toLocaleDateString("en-US",{month:"short",day:"numeric"})} - ${l.toLocaleDateString("en-US",{month:"short",day:"numeric"})}`};}); }
 function habitRows(grid,days,habits) { return habits.map(h=>{const vals=days.map(d=>Boolean(grid[toDateKey(d)]?.[h.id])); const done=vals.filter(Boolean).length; let best=0,run=0; vals.forEach(v=>{run=v?run+1:0;best=Math.max(best,run)}); return {...h,done,total:days.length,pct:Math.round((done/days.length)*100),streak:best};}).sort((a,b)=>b.pct-a.pct||a.title.localeCompare(b.title)); }
-function currentStreak(grid,habits) { const today=new Date(); let streak=0; for(let i=0;i<365;i++){const d=new Date(today);d.setDate(d.getDate()-i); const k=toDateKey(d),c=grid[k]||{}; const done=habits.filter(h=>c[h.id]).length; if(done>0)streak++;else break;} return streak; }
-function longestStreak(grid,habits) { const today=new Date(); let best=0,run=0; for(let i=365;i>=0;i--){const d=new Date(today);d.setDate(d.getDate()-i); const k=toDateKey(d),c=grid[k]||{}; if(habits.filter(h=>c[h.id]).length>0){run++;best=Math.max(best,run)}else{run=0}} return best; }
+function currentStreak(grid,habits) { const today=dayforgeDate(); let streak=0; for(let i=0;i<365;i++){const d=new Date(today);d.setDate(d.getDate()-i); const k=toDateKey(d),c=grid[k]||{}; const done=habits.filter(h=>c[h.id]).length; if(done>0)streak++;else break;} return streak; }
+function longestStreak(grid,habits) { const today=dayforgeDate(); let best=0,run=0; for(let i=365;i>=0;i--){const d=new Date(today);d.setDate(d.getDate()-i); const k=toDateKey(d),c=grid[k]||{}; if(habits.filter(h=>c[h.id]).length>0){run++;best=Math.max(best,run)}else{run=0}} return best; }
 function focusScore(grid,days,habits) { if(!habits.length)return 0; const ms=buildMonthStats(grid,days,habits); const cs=Math.min(currentStreak(grid,habits)*3,30); return Math.min(100,Math.round(ms.pct*0.7+cs)); }
 
 function App() {
   const [auth, setAuth] = useState(null);
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
-  const [monthDate, setMonthDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(toDateKey(new Date()));
+  const [monthDate, setMonthDate] = useState(() => dayforgeDate());
+  const [selectedDate, setSelectedDate] = useState(() => dayforgeTodayKey());
   const [habits, setHabits] = useState([]);
   const [grid, setGrid] = useState({});
   const [theme, setTheme] = useState(localStorage.getItem("dayforge_theme") || "dark");
@@ -244,11 +296,14 @@ function App() {
   const [privacyPin, setPrivacyPin] = useState("");
   const [privacyUnlockPin, setPrivacyUnlockPin] = useState("");
   const [privacyMessage, setPrivacyMessage] = useState("");
+  const [privacyOpen, setPrivacyOpen] = useState(false);
   const [heroImg] = useState(() => pick(HERO_IMAGES));
   const [quote] = useState(() => pick(QUOTES));
   const [missionLine] = useState(() => pick(MISSION_LINES));
   const [reminders, setReminders] = useState([]);
-  const [reminderDraft, setReminderDraft] = useState({ title: "", date: toDateKey(new Date()), time: "09:00" });
+  const [reminderDraft, setReminderDraft] = useState({ title: "", date: dayforgeTodayKey(), time: "09:00", priority: "normal" });
+  const [dailyExtras, setDailyExtras] = useState({});
+  const [extraDraft, setExtraDraft] = useState("");
 
   const days = useMemo(() => monthDays(monthDate), [monthDate]);
   const monthId = monthKey(monthDate);
@@ -276,24 +331,33 @@ function App() {
     const nextProfile = { ...localProfile, displayName: localProfile.displayName || defaultDisplayName(user) };
     const localSettings = localWorkspace.notificationSettings || {};
     const localHabits = (localWorkspace.habits || []).map(normalizeHabit).filter(h => !isLegacyDefaultHabit(h));
-    const localPrivacy = readPrivacySettings(user.uid);
-    const privacyEnabled = Boolean(localPrivacy.enabled && localPrivacy.pinHash && localPrivacy.salt);
+    const localPrivacy = newestPrivacySettings(localWorkspace.privacySettings || {}, readPrivacySettings(user.uid));
+    const privacyEnabled = privacyIsEnabled(localPrivacy);
     setPrivacySettings(localPrivacy);
     setPrivacyUnlocked(!privacyEnabled);
     setPrivacyMessage(privacyEnabled ? "PIN required" : "Privacy lock off");
     setPrivacyPin("");
     setPrivacyUnlockPin("");
-    setPrivacyReady(true);
+    setPrivacyReady(privacyEnabled);
     setProfile(nextProfile);
     setProfileDraft(nextProfile.displayName || defaultDisplayName(user));
     setNotificationSettings(localSettings);
-    setReminders(localWorkspace.reminders || []);
+    setReminders((localWorkspace.reminders || []).map(normalizeReminder));
     setHabits(localHabits);
     setGrid(readLocal(user.uid, monthId));
+    setDailyExtras(readLocal(user.uid, `${monthId}_extras`));
     syncFromBackend();
     sendWelcomeEmail();
   }, [user, monthId]);
   useEffect(() => { if (!user) return; writeLocal(user.uid, monthId, grid); }, [grid, monthId, user]);
+  useEffect(() => { if (!user) return; writeLocal(user.uid, `${monthId}_extras`, dailyExtras); }, [dailyExtras, monthId, user]);
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const nextKey = dayforgeTodayKey();
+      setSelectedDate(current => current === nextKey ? current : nextKey);
+    }, 60000);
+    return () => window.clearInterval(timer);
+  }, []);
   useEffect(() => {
     if (!user) return;
     checkDueReminders();
@@ -307,6 +371,18 @@ function App() {
     return h;
   }
 
+  function applyPrivacySettings(nextPrivacy, lockWhenEnabled = false) {
+    if (!user) return normalizePrivacySettings(nextPrivacy);
+    const cleanPrivacy = normalizePrivacySettings(nextPrivacy);
+    const enabled = privacyIsEnabled(cleanPrivacy);
+    writePrivacySettings(user.uid, cleanPrivacy);
+    setPrivacySettings(cleanPrivacy);
+    setPrivacyUnlocked(lockWhenEnabled ? !enabled : current => enabled ? current : true);
+    setPrivacyMessage(enabled ? (lockWhenEnabled ? "PIN required" : "Privacy lock on") : "Privacy lock off");
+    setPrivacyReady(true);
+    return cleanPrivacy;
+  }
+
   async function syncFromBackend() {
     if (!user) return;
     try {
@@ -315,6 +391,7 @@ function App() {
       if (!r.ok) throw new Error(await apiMessage(r, `Snapshot failed (${r.status})`));
       const p = await r.json();
       const wh = (p.workspace?.habits || []).map(normalizeHabit).filter(h => h.active && !isLegacyDefaultHabit(h));
+      const syncedHabits = wh.length ? wh : activeHabits;
       if (wh.length) {
         setHabits(wh);
         writeLocalWorkspace(user.uid, { ...(p.workspace || {}), habits: wh });
@@ -330,17 +407,38 @@ function App() {
       setProfile(nextProfile);
       setProfileDraft(nextProfile.displayName || defaultDisplayName(user));
       setNotificationSettings(nextSettings);
-      setReminders(p.workspace?.reminders || []);
+      setReminders((p.workspace?.reminders || []).map(normalizeReminder));
+      const localPrivacy = newestPrivacySettings(readLocalWorkspace(user.uid).privacySettings || {}, readPrivacySettings(user.uid));
+      const remotePrivacy = p.workspace?.privacySettings || {};
+      const nextPrivacy = newestPrivacySettings(localPrivacy, remotePrivacy);
+      applyPrivacySettings(nextPrivacy, privacyIsEnabled(nextPrivacy) && !privacyReady);
+      if (privacyUpdatedAt(nextPrivacy) > privacyUpdatedAt(remotePrivacy)) {
+        const mergedWorkspace = workspaceFor(user, wh.length ? wh : habits, p.workspace?.reminders || reminders, nextProfile, nextSettings, nextPrivacy);
+        fetch(`${apiBase()}/api/workspace`, {
+          method: "PUT",
+          headers: await authHeaders(),
+          body: JSON.stringify({ workspace: mergedWorkspace })
+        }).catch(() => {});
+      }
       const ng = {};
-      days.forEach(d => { const k = toDateKey(d); ng[k] = p.days?.[k]?.habitChecks || {}; });
+      const nextExtras = {};
+      const habitIds = new Set(syncedHabits.map(h => h.id));
+      days.forEach(d => {
+        const k = toDateKey(d);
+        ng[k] = p.days?.[k]?.habitChecks || {};
+        const tasks = Array.isArray(p.days?.[k]?.tasks) ? p.days[k].tasks : [];
+        const extras = tasks.filter(task => task && !habitIds.has(String(task.id)) && !habitIds.has(String(task.habitId))).map(normalizeExtraItem).filter(Boolean);
+        if (extras.length) nextExtras[k] = extras;
+      });
       setGrid(c => ({ ...ng, ...c }));
+      setDailyExtras(c => ({ ...nextExtras, ...c }));
       setSyncState(`Backend connected: ${p.primaryStore || "backend"}`);
-    } catch (error) { setSyncState(`Backend offline: ${error.message}`); }
+    } catch (error) { setPrivacyReady(true); setSyncState(`Backend offline: ${error.message}`); }
   }
 
   async function saveWorkspace(nh) {
     if (!user) return;
-    const workspace = workspaceFor(user, nh, reminders, profile, notificationSettings);
+    const workspace = workspaceFor(user, nh, reminders, profile, notificationSettings, privacySettings);
     writeLocalWorkspace(user.uid, workspace);
     try {
       const r = await fetch(`${apiBase()}/api/workspace`, {
@@ -353,6 +451,7 @@ function App() {
         writeLocalWorkspace(user.uid, p.workspace);
         setProfile(p.workspace.profile || workspace.profile);
         setNotificationSettings(p.workspace.notificationSettings || workspace.notificationSettings);
+        applyPrivacySettings(p.workspace.privacySettings || workspace.privacySettings);
       }
       setSyncState(`Habits saved: ${p.store || "backend"}`);
     } catch (error) { setSyncState(`Saved locally: ${error.message}`); }
@@ -372,14 +471,22 @@ function App() {
     } catch (error) { setWelcomeState(`Welcome failed: ${error.message}`); }
   }
 
-  async function pushDay(dk, checks) {
+  function tasksForDay(dk, checks, extrasByDay = dailyExtras) {
+    const extras = (extrasByDay[dk] || []).map(normalizeExtraItem).filter(Boolean);
+    return [
+      ...activeHabits.map(h => ({ id: h.id, title: h.title, text: h.title, done: Boolean(checks[h.id]), priority: "medium", habitId: h.id, estimateMins: 20 })),
+      ...extras.map(item => ({ ...item, estimateMins: item.priority === "high" ? 45 : 25 })),
+    ];
+  }
+
+  async function pushDay(dk, checks, extrasByDay = dailyExtras) {
     if (!user) return;
     try {
       const done = activeHabits.filter(h => checks[h.id]).length;
       const status = done === activeHabits.length ? "won" : done > 0 ? "neutral" : "missed";
       const r = await fetch(`${apiBase()}/api/days/${dk}`, {
         method: "PUT", headers: await authHeaders(),
-        body: JSON.stringify({ day: { dateKey: dk, status, focusLine: quote, habitChecks: checks, tasks: activeHabits.map(h => ({ id: h.id, title: h.title, text: h.title, done: Boolean(checks[h.id]), priority: "medium", estimateMins: 20 })) } })
+        body: JSON.stringify({ day: { dateKey: dk, status, focusLine: quote, habitChecks: checks, tasks: tasksForDay(dk, checks, extrasByDay) } })
       });
       if (!r.ok) throw new Error(await apiMessage(r, `Day save failed (${r.status})`));
       setSyncState("Day saved");
@@ -388,6 +495,33 @@ function App() {
 
   function toggleHabit(dk, hid) {
     setGrid(c => { const nc = { ...(c[dk] || {}), [hid]: !c[dk]?.[hid] }; pushDay(dk, nc); return { ...c, [dk]: nc }; });
+  }
+
+  function addExtraItem(e) {
+    e.preventDefault();
+    const item = normalizeExtraItem({ title: extraDraft, priority: "medium" });
+    if (!item) return;
+    const nextExtras = { ...dailyExtras, [selectedDate]: [...(dailyExtras[selectedDate] || []), item] };
+    setDailyExtras(nextExtras);
+    setExtraDraft("");
+    pushDay(selectedDate, grid[selectedDate] || {}, nextExtras);
+  }
+
+  function toggleExtraItem(dateKey, itemId) {
+    const nextExtras = {
+      ...dailyExtras,
+      [dateKey]: (dailyExtras[dateKey] || []).map(item => item.id === itemId ? { ...item, done: !item.done } : item)
+    };
+    setDailyExtras(nextExtras);
+    pushDay(dateKey, grid[dateKey] || {}, nextExtras);
+  }
+
+  function deleteExtraItem(dateKey, itemId) {
+    const nextItems = (dailyExtras[dateKey] || []).filter(item => item.id !== itemId);
+    const nextExtras = { ...dailyExtras, [dateKey]: nextItems };
+    if (!nextItems.length) delete nextExtras[dateKey];
+    setDailyExtras(nextExtras);
+    pushDay(dateKey, grid[dateKey] || {}, nextExtras);
   }
 
   function addHabit(e) {
@@ -405,9 +539,12 @@ function App() {
   async function addReminder(e) {
     e.preventDefault();
     const t = reminderDraft.title.trim(); if (!t) return;
-    const nr = [...reminders, { id: uid(), title: t, date: reminderDraft.date, time: reminderDraft.time, category: "focus", notify: true, done: false, createdAt: new Date().toISOString() }];
+    if (reminderDraft.priority === "high" && "Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
+    const nr = [...reminders, normalizeReminder({ id: uid(), title: t, date: reminderDraft.date, time: reminderDraft.time, priority: reminderDraft.priority, category: "focus", notify: true, done: false, createdAt: new Date().toISOString() })];
     setReminders(nr);
-    setReminderDraft({ title: "", date: toDateKey(new Date()), time: "09:00" });
+    setReminderDraft({ title: "", date: dayforgeTodayKey(), time: "09:00", priority: "normal" });
     await saveWorkspaceWithReminders(nr);
     await checkDueReminders(true);
   }
@@ -420,7 +557,7 @@ function App() {
 
   async function saveWorkspaceWithReminders(nr) {
     if (!user) return;
-    const workspace = workspaceFor(user, habits, nr, profile, notificationSettings);
+    const workspace = workspaceFor(user, habits, nr, profile, notificationSettings, privacySettings);
     writeLocalWorkspace(user.uid, workspace);
     try {
       const r = await fetch(`${apiBase()}/api/workspace`, {
@@ -433,6 +570,7 @@ function App() {
         writeLocalWorkspace(user.uid, p.workspace);
         setProfile(p.workspace.profile || workspace.profile);
         setNotificationSettings(p.workspace.notificationSettings || workspace.notificationSettings);
+        applyPrivacySettings(p.workspace.privacySettings || workspace.privacySettings);
       }
       setSyncState("Reminders saved");
     } catch (error) { setSyncState(`Saved locally: ${error.message}`); }
@@ -444,7 +582,7 @@ function App() {
     const name = profileDraft.trim();
     if (!name) return;
     const nextProfile = { ...profile, displayName: name };
-    const workspace = workspaceFor(user, habits, reminders, nextProfile, notificationSettings);
+    const workspace = workspaceFor(user, habits, reminders, nextProfile, notificationSettings, privacySettings);
     setProfile(nextProfile);
     writeLocalWorkspace(user.uid, workspace);
     try {
@@ -458,6 +596,7 @@ function App() {
         writeLocalWorkspace(user.uid, p.workspace);
         setProfile(p.workspace.profile || workspace.profile);
         setNotificationSettings(p.workspace.notificationSettings || workspace.notificationSettings);
+        applyPrivacySettings(p.workspace.privacySettings || workspace.privacySettings);
       }
       setSyncState("Profile saved");
     } catch (error) {
@@ -481,8 +620,14 @@ function App() {
       const p = await r.json();
       if (!p.ok) throw new Error(p.failures?.[0]?.error || "Reminder mail provider rejected the send.");
       if (p.workspace?.reminders) {
-        setReminders(p.workspace.reminders);
+        setReminders(p.workspace.reminders.map(normalizeReminder));
         writeLocalWorkspace(user.uid, p.workspace);
+      }
+      const highPriority = (p.sentReminders || []).filter(item => item.priority === "high");
+      if (highPriority.length && "Notification" in window && Notification.permission === "granted") {
+        highPriority.slice(0, 3).forEach(item => {
+          new Notification(`Priority: ${item.title}`, { body: "DayForge high-priority reminder is due now." });
+        });
       }
       setReminderState(p.sent ? `${p.sent} email sent` : "Mail armed");
     } catch (error) {
@@ -501,22 +646,45 @@ function App() {
     const salt = randomSalt();
     const pinHash = await hashPin(pin, salt);
     const settings = { enabled: true, salt, pinHash, updatedAt: new Date().toISOString() };
-    writePrivacySettings(user.uid, settings);
-    setPrivacySettings(settings);
+    applyPrivacySettings(settings);
     setPrivacyUnlocked(true);
     setPrivacyPin("");
     setPrivacyMessage("Privacy lock on");
+    await savePrivacySettings(settings);
   }
 
-  function disablePrivacyLock() {
+  async function disablePrivacyLock() {
     if (!user) return;
     const settings = { enabled: false, updatedAt: new Date().toISOString() };
-    writePrivacySettings(user.uid, settings);
-    setPrivacySettings(settings);
+    applyPrivacySettings(settings);
     setPrivacyUnlocked(true);
     setPrivacyPin("");
     setPrivacyUnlockPin("");
     setPrivacyMessage("Privacy lock off");
+    await savePrivacySettings(settings);
+  }
+
+  async function savePrivacySettings(nextPrivacy) {
+    if (!user) return;
+    const workspace = workspaceFor(user, habits, reminders, profile, notificationSettings, nextPrivacy);
+    const cached = { ...readLocalWorkspace(user.uid), ...workspace };
+    writeLocalWorkspace(user.uid, cached);
+    try {
+      const r = await fetch(`${apiBase()}/api/workspace`, {
+        method: "PUT",
+        headers: await authHeaders(),
+        body: JSON.stringify({ workspace })
+      });
+      if (!r.ok) throw new Error(await apiMessage(r, `Privacy save failed (${r.status})`));
+      const p = await r.json();
+      if (p.workspace) {
+        writeLocalWorkspace(user.uid, p.workspace);
+        applyPrivacySettings(p.workspace.privacySettings || nextPrivacy);
+      }
+      setSyncState("Privacy saved");
+    } catch (error) {
+      setSyncState(`Privacy saved locally: ${error.message}`);
+    }
   }
 
   async function unlockPrivacy(e) {
@@ -671,7 +839,7 @@ function App() {
 
   const ms = buildMonthStats(grid, days, activeHabits);
   const ws = buildWeeklyStats(grid, days, activeHabits);
-  const todayKey = toDateKey(new Date());
+  const todayKey = dayforgeTodayKey();
   const todayStats = dayStats(grid[todayKey] || {}, activeHabits);
   const cs = currentStreak(grid, activeHabits);
   const ls = longestStreak(grid, activeHabits);
@@ -694,15 +862,6 @@ function App() {
           </div>
           <button type="submit" title="Save profile name">Save</button>
         </form>
-        <PrivacyPanel
-          enabled={privacyEnabled}
-          pin={privacyPin}
-          setPin={setPrivacyPin}
-          message={privacyMessage}
-          onSave={enablePrivacyLock}
-          onDisable={disablePrivacyLock}
-          onLock={lockDashboard}
-        />
         <div className="select-row">
           <label>Month<select value={monthDate.getMonth()} onChange={e => setMonthDate(new Date(monthDate.getFullYear(), Number(e.target.value), 1))}>
             {Array.from({length:12},(_,i)=><option key={i} value={i}>{new Date(2026,i,1).toLocaleDateString("en-US",{month:"long"})}</option>)}
@@ -729,16 +888,45 @@ function App() {
         </form>
         <div className="account-row">
           <button className="auth-button" type="button" onClick={handleAuth}>Sign out</button>
+          <button className="privacy-word-button" type="button" onClick={() => setPrivacyOpen(true)}>Privacy</button>
           <button className="theme-button small" type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></button>
         </div>
         <p className="sync-line">{syncState} - {welcomeState}</p>
       </section>
+      {privacyOpen && (
+        <PrivacyModal onClose={() => setPrivacyOpen(false)}>
+          <PrivacyPanel
+            enabled={privacyEnabled}
+            pin={privacyPin}
+            setPin={setPrivacyPin}
+            message={privacyMessage}
+            onSave={enablePrivacyLock}
+            onDisable={disablePrivacyLock}
+            onLock={lockDashboard}
+          />
+        </PrivacyModal>
+      )}
 
       {/* CENTER PANEL */}
       <section className="center-panel" style={{"--days": days.length}}>
         <MissionBanner missionLine={missionLine} pct={ms.pct} firstName={firstName} todayStats={todayStats} cs={cs} ws={ws} activeHabits={activeHabits} />
         <ProgressBar pct={ms.pct} done={ms.done} total={ms.total} daysCount={days.length} />
-        <Heatmap days={days} grid={grid} habits={activeHabits} todayKey={todayKey} selectedDate={selectedDate} onSelect={setSelectedDate} onToggle={toggleHabit} monthDate={monthDate} />
+        <Heatmap
+          days={days}
+          grid={grid}
+          habits={activeHabits}
+          todayKey={todayKey}
+          selectedDate={selectedDate}
+          onSelect={setSelectedDate}
+          onToggle={toggleHabit}
+          monthDate={monthDate}
+          extras={dailyExtras[selectedDate] || []}
+          extraDraft={extraDraft}
+          setExtraDraft={setExtraDraft}
+          onAddExtra={addExtraItem}
+          onToggleExtra={toggleExtraItem}
+          onDeleteExtra={deleteExtraItem}
+        />
         <WeeklySection weeks={ws} />
       </section>
 
@@ -790,6 +978,23 @@ function PrivacyGate({ displayName, initials, pin, setPin, message, onUnlock, on
           <button type="button" onClick={onSignOut}>Sign out</button>
           <button type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>Theme</button>
         </div>
+      </section>
+    </div>
+  );
+}
+
+function PrivacyModal({ children, onClose }) {
+  return (
+    <div className="privacy-modal-backdrop" role="dialog" aria-modal="true" aria-label="Privacy settings">
+      <section className="privacy-modal">
+        <div className="privacy-modal-head">
+          <div>
+            <span>Privacy</span>
+            <h2>Protect this dashboard</h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close privacy settings">&times;</button>
+        </div>
+        {children}
       </section>
     </div>
   );
@@ -862,9 +1067,10 @@ function ProgressBar({ pct, done, total, daysCount }) {
   );
 }
 
-function Heatmap({ days, grid, habits, todayKey, selectedDate, onSelect, onToggle, monthDate }) {
+function Heatmap({ days, grid, habits, todayKey, selectedDate, onSelect, onToggle, monthDate, extras, extraDraft, setExtraDraft, onAddExtra, onToggleExtra, onDeleteExtra }) {
   const selectedChecks = grid[selectedDate] || {};
   const selectedStats = dayStats(selectedChecks, habits);
+  const doneExtras = extras.filter(item => item.done).length;
   return (
     <div className="heatmap-card" style={{"--days": days.length}}>
       <div className="heatmap-title">{monthDate.toLocaleDateString("en-US",{month:"long",year:"numeric"})} - Habit Tracker</div>
@@ -914,7 +1120,7 @@ function Heatmap({ days, grid, habits, todayKey, selectedDate, onSelect, onToggl
       <div className="selected-day-panel">
         <div className="selected-day-head">
           <span>{selectedDate}</span>
-          <strong>{selectedStats.done}/{selectedStats.total} done</strong>
+          <strong>{selectedStats.done}/{selectedStats.total} habits · {doneExtras}/{extras.length} extras</strong>
         </div>
         <div className="selected-day-checks">
           {habits.map(h => {
@@ -926,6 +1132,28 @@ function Heatmap({ days, grid, habits, todayKey, selectedDate, onSelect, onToggl
               </label>
             );
           })}
+        </div>
+        <div className="today-extra-panel">
+          <div className="today-extra-head">
+            <span>Today Only</span>
+            <strong>Meetings, assignments, calls</strong>
+          </div>
+          <form className="today-extra-form" onSubmit={onAddExtra}>
+            <input value={extraDraft} onChange={e => setExtraDraft(e.target.value)} placeholder="Add meeting, assignment, contest..." maxLength={90} />
+            <button type="submit">Add</button>
+          </form>
+          <div className="today-extra-list">
+            {extras.length === 0 && <div className="today-extra-empty">No one-off items for this day.</div>}
+            {extras.map(item => (
+              <div className={`today-extra-item ${item.done ? "done" : ""}`} key={item.id}>
+                <label>
+                  <input type="checkbox" checked={item.done} onChange={() => onToggleExtra(selectedDate, item.id)} />
+                  <span>{item.title}</span>
+                </label>
+                <button type="button" onClick={() => onDeleteExtra(selectedDate, item.id)} aria-label={`Delete ${item.title}`}>&times;</button>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
@@ -998,7 +1226,7 @@ function DailyProgressCard({ rows, daysCount }) {
 
 function ReminderCard({ reminders, draft, setDraft, onAdd, onDelete, status }) {
   const sorted = [...reminders].sort((a, b) => reminderStamp(a).localeCompare(reminderStamp(b)));
-  const today = toDateKey(new Date());
+  const today = dayforgeTodayKey();
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const next = sorted.find(r => !r.done);
@@ -1022,6 +1250,10 @@ function ReminderCard({ reminders, draft, setDraft, onAdd, onDelete, status }) {
           <span>Title</span>
           <input placeholder="Wake up bro" value={draft.title} onChange={e => setDraft({...draft, title: e.target.value})} maxLength={60} required />
         </label>
+        <div className="reminder-priority-toggle" role="group" aria-label="Reminder priority">
+          <button type="button" className={draft.priority !== "high" ? "active" : ""} onClick={() => setDraft({...draft, priority: "normal"})}>Normal</button>
+          <button type="button" className={draft.priority === "high" ? "active high" : ""} onClick={() => setDraft({...draft, priority: "high"})}>Priority</button>
+        </div>
         <label className="reminder-field">
           <span>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 2v4M16 2v4M3 10h18"/><rect x="3" y="4" width="18" height="18" rx="3"/></svg>
@@ -1046,7 +1278,7 @@ function ReminderCard({ reminders, draft, setDraft, onAdd, onDelete, status }) {
       <div className="reminder-list">
         {sorted.length === 0 && <div className="reminder-empty">No reminders yet. Add one to get email notifications.</div>}
         {sorted.map(r => (
-          <div className="reminder-item" key={r.id}>
+          <div className={`reminder-item ${r.priority === "high" ? "priority" : ""}`} key={r.id}>
             <span className="r-title">{r.title}</span>
             <span className="r-date">{prettyReminderDate(r.date)}</span>
             <span className="r-time">{prettyReminderTime(r.time)}</span>

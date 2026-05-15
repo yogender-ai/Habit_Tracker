@@ -35,6 +35,8 @@ body[data-theme="light"]{
 @keyframes glowPulse{0%,100%{box-shadow:0 0 8px var(--purple-glow),0 0 0 1px var(--border)}50%{box-shadow:0 0 20px var(--purple-glow),0 0 0 1px rgba(167,139,250,0.2)}}
 @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes bgDrift{0%{transform:translate3d(-1%,0,0) scale(1)}100%{transform:translate3d(1.5%,-1%,0) scale(1.04)}}
+@keyframes starDrift{0%{transform:translateY(0)}100%{transform:translateY(-18px)}}
 @keyframes popIn{from{transform:scale(0.85);opacity:0}to{transform:scale(1);opacity:1}}
 @keyframes streakFire{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
 @keyframes borderGlow{0%,100%{border-color:rgba(167,139,250,0.1)}50%{border-color:rgba(167,139,250,0.25)}}
@@ -47,12 +49,12 @@ body{
   -webkit-font-smoothing:antialiased;
 }
 body::before{
-  content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  content:'';position:fixed;inset:-3%;z-index:0;pointer-events:none;
   background:
     radial-gradient(ellipse 70% 50% at 10% 0%,rgba(129,140,248,0.07),transparent),
     radial-gradient(ellipse 50% 40% at 90% 100%,rgba(167,139,250,0.05),transparent),
     radial-gradient(ellipse 40% 30% at 50% 50%,rgba(244,114,182,0.03),transparent);
-  animation:fadeIn 1s ease;
+  animation:fadeIn 1s ease,bgDrift 18s ease-in-out infinite alternate;
 }
 body[data-theme="light"]::before{
   background:
@@ -61,7 +63,7 @@ body[data-theme="light"]::before{
     linear-gradient(135deg,rgba(255,255,255,0.85),rgba(226,232,242,0.52));
 }
 body::after{
-  content:'';position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.4;
+  content:'';position:fixed;inset:-3%;z-index:0;pointer-events:none;opacity:.4;
   background-image:
     radial-gradient(1px 1px at 10% 20%,rgba(167,139,250,0.6),transparent),
     radial-gradient(1px 1px at 30% 65%,rgba(129,140,248,0.5),transparent),
@@ -71,7 +73,7 @@ body::after{
     radial-gradient(1px 1px at 15% 85%,rgba(34,211,238,0.3),transparent),
     radial-gradient(1.5px 1.5px at 45% 45%,rgba(167,139,250,0.5),transparent),
     radial-gradient(1px 1px at 92% 12%,rgba(244,114,182,0.4),transparent);
-  animation:pulse 6s ease-in-out infinite;
+  animation:pulse 6s ease-in-out infinite,starDrift 16s linear infinite alternate;
 }
 body[data-theme="light"]::after{opacity:.18}
 button,input,select{font:inherit}
@@ -184,6 +186,24 @@ input:focus,select:focus{border-color:var(--purple)}
   background:var(--surface);color:var(--ink);font-size:11px;font-weight:900;
 }
 .privacy-gate-actions button:hover{border-color:var(--purple);color:var(--purple)}
+.privacy-modal-backdrop{
+  position:fixed;inset:0;z-index:30;display:grid;place-items:center;padding:22px;
+  background:rgba(4,7,18,.56);backdrop-filter:blur(18px);
+  animation:fadeIn .2s var(--ease);
+}
+.privacy-modal{
+  width:min(430px,100%);border:1px solid var(--border);border-radius:20px;
+  background:var(--glass2);box-shadow:0 28px 90px rgba(0,0,0,.42);
+  padding:16px;display:grid;gap:12px;
+}
+.privacy-modal-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.privacy-modal-head span{display:block;font-size:9px;font-weight:900;letter-spacing:3px;text-transform:uppercase;color:var(--purple);margin-bottom:4px}
+.privacy-modal-head h2{font-family:'Space Grotesk',sans-serif;font-size:22px;line-height:1.1;color:var(--ink)}
+.privacy-modal-head>button{
+  width:32px;height:32px;border-radius:10px;border:1px solid var(--border);background:var(--surface);
+  color:var(--muted);font-size:18px;font-weight:800;transition:all .2s var(--ease);
+}
+.privacy-modal-head>button:hover{color:var(--red);border-color:var(--red)}
 .first-habit-form{display:grid;grid-template-columns:minmax(0,1fr) 96px;gap:10px;margin-top:22px;max-width:500px}
 .first-habit-form input{min-height:46px;padding:0 14px;font-size:14px;font-weight:700}
 .first-habit-form button{min-height:46px;border:0;border-radius:var(--radius-sm);background:linear-gradient(135deg,var(--indigo),var(--purple));color:#fff;font-size:13px;font-weight:800}
@@ -393,12 +413,17 @@ input:focus,select:focus{border-color:var(--purple)}
   color:#fff;font-size:10px;font-weight:800;border-radius:var(--radius-sm);transition:all .2s var(--ease);
 }
 .add-habit button:hover{box-shadow:0 4px 16px var(--purple-glow)}
-.account-row{display:grid;grid-template-columns:1fr 52px;gap:5px;flex-shrink:0}
+.account-row{display:grid;grid-template-columns:1fr 66px 52px;gap:5px;flex-shrink:0}
 .auth-button{
   min-height:34px;border:1px solid var(--border);background:var(--surface);
   color:var(--ink);font-size:11px;font-weight:700;border-radius:8px;transition:all .2s;
 }
 .auth-button:hover{border-color:var(--red);color:var(--red)}
+.privacy-word-button{
+  min-height:34px;border:1px solid var(--border);background:linear-gradient(135deg,rgba(167,139,250,.10),rgba(52,211,153,.06));
+  color:var(--ink);font-size:9px;font-weight:900;border-radius:8px;text-transform:uppercase;letter-spacing:.7px;transition:all .2s var(--ease);
+}
+.privacy-word-button:hover{border-color:var(--purple);color:var(--purple);box-shadow:0 0 18px var(--purple-glow)}
 .theme-button.small{
   margin:0;min-width:52px;min-height:34px;border:1px solid var(--border);
   background:var(--surface);color:var(--ink);font-size:11px;font-weight:800;border-radius:8px;transition:all .2s;
@@ -495,6 +520,31 @@ input:focus,select:focus{border-color:var(--purple)}
 .selected-day-check input{width:14px;height:14px;margin:0;accent-color:var(--mint)}
 .selected-day-check span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .selected-day-check.done{border-color:rgba(86,211,157,0.5);background:rgba(86,211,157,0.12);color:var(--ink)}
+.today-extra-panel{margin-top:10px;border-top:1px solid var(--border);padding-top:10px;display:grid;gap:8px}
+.today-extra-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.today-extra-head span{font-size:9px;font-weight:900;letter-spacing:2px;text-transform:uppercase;color:var(--purple)}
+.today-extra-head strong{font-size:9px;font-weight:800;color:var(--muted);white-space:nowrap}
+.today-extra-form{display:grid;grid-template-columns:minmax(0,1fr) 54px;gap:7px}
+.today-extra-form input{
+  min-height:34px;padding:0 10px;border-radius:9px;border:1px solid var(--border);
+  background:rgba(255,255,255,.045);color:var(--ink);font-size:11px;font-weight:750;
+}
+.today-extra-form button{
+  min-height:34px;border-radius:9px;background:linear-gradient(135deg,var(--mint),var(--cyan));
+  color:#04111f;font-size:10px;font-weight:900;
+}
+.today-extra-list{display:grid;gap:6px;max-height:86px;overflow-y:auto}
+.today-extra-empty{padding:8px 10px;border:1px dashed var(--border);border-radius:9px;color:var(--dim);font-size:10px;font-weight:750;text-align:center}
+.today-extra-item{
+  display:grid;grid-template-columns:minmax(0,1fr) 22px;align-items:center;gap:8px;
+  min-height:32px;padding:0 8px;border:1px solid var(--border);border-radius:9px;background:rgba(255,255,255,.035);
+}
+.today-extra-item label{min-width:0;display:grid;grid-template-columns:16px minmax(0,1fr);align-items:center;gap:7px;cursor:pointer}
+.today-extra-item input{width:14px;height:14px;accent-color:var(--mint)}
+.today-extra-item span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:800;color:var(--ink)}
+.today-extra-item.done span{text-decoration:line-through;color:var(--muted)}
+.today-extra-item button{width:20px;height:20px;border-radius:6px;color:var(--dim);font-size:13px}
+.today-extra-item button:hover{background:rgba(248,113,113,.10);color:var(--red)}
 
 /* Weekly Rings */
 .weekly-card{
@@ -642,9 +692,19 @@ input:focus,select:focus{border-color:var(--purple)}
   padding:10px 12px 8px;border-bottom:1px solid rgba(255,255,255,0.04);
 }
 .reminder-title-field{grid-column:1 / -1}
+.reminder-priority-toggle{
+  grid-column:1 / -1;display:grid;grid-template-columns:1fr 1fr;gap:6px;
+  padding:3px;border:1px solid var(--border);border-radius:11px;background:rgba(255,255,255,.04);
+}
+.reminder-priority-toggle button{
+  min-height:26px;border-radius:8px;color:var(--muted);font-size:9px;font-weight:900;
+  letter-spacing:1px;text-transform:uppercase;transition:all .2s var(--ease);
+}
+.reminder-priority-toggle button.active{background:rgba(167,139,250,.14);color:var(--ink);box-shadow:inset 0 0 0 1px rgba(167,139,250,.18)}
+.reminder-priority-toggle button.active.high{background:rgba(251,191,36,.14);color:var(--amber);box-shadow:inset 0 0 0 1px rgba(251,191,36,.22)}
 .reminder-title-field,.reminder-field{
   display:grid;gap:4px;min-width:0;border:1px solid var(--border);border-radius:10px;
-  padding:7px 9px;background:linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.035));
+  padding:7px 9px;background:linear-gradient(180deg,rgba(255,255,255,0.095),rgba(255,255,255,0.045));
   transition:border-color .2s var(--ease),box-shadow .2s var(--ease);
 }
 .reminder-title-field:focus-within,.reminder-field:focus-within{border-color:var(--purple);box-shadow:0 0 0 3px var(--purple-glow)}
@@ -657,6 +717,7 @@ input:focus,select:focus{border-color:var(--purple)}
 }
 .reminder-form input:focus{border:0;outline:none}
 .reminder-form input[type="date"],.reminder-form input[type="time"]{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink)}
+.reminder-form input[type="date"],.reminder-form input[type="time"]{color-scheme:dark}
 .reminder-form input::-webkit-calendar-picker-indicator{
   opacity:.75;cursor:pointer;filter:invert(72%) sepia(25%) saturate(745%) hue-rotate(214deg);
 }
@@ -683,6 +744,7 @@ input:focus,select:focus{border-color:var(--purple)}
   transition:background .15s;
 }
 .reminder-item:hover{background:rgba(167,139,250,0.04)}
+.reminder-item.priority{background:linear-gradient(90deg,rgba(251,191,36,.09),transparent);border-left:2px solid var(--amber)}
 .reminder-item .r-title{font-size:11px;font-weight:750;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .reminder-item .r-time{
   font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:800;
@@ -793,6 +855,14 @@ body[data-theme="light"] .privacy-pin-form input,
 body[data-theme="light"] .privacy-unlock-form input{
   background:#f8fafc;
   border-color:#cfd8e8;
+}
+body[data-theme="light"] .reminder-form input[type="date"],
+body[data-theme="light"] .reminder-form input[type="time"]{color-scheme:light}
+body[data-theme="light"] .today-extra-form input,
+body[data-theme="light"] .today-extra-item,
+body[data-theme="light"] .reminder-priority-toggle{
+  background:#f8fafc;
+  border-color:#d4dbea;
 }
 
 /* ── RESPONSIVE ────────────────────────── */
