@@ -40,16 +40,69 @@ const MISSION_LINES = [
 ];
 
 const HERO_IMAGES = [
-  "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600&q=80",
-  "https://images.unsplash.com/photo-1549476464-37392f717541?w=600&q=80",
-  "https://images.unsplash.com/photo-1574680096145-d05b474e2155?w=600&q=80",
-  "https://images.unsplash.com/photo-1518611012118-696072aa579a?w=600&q=80",
-  "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=600&q=80",
-  "https://images.unsplash.com/photo-1605296867424-35fc25c9212a?w=600&q=80",
-  "https://images.unsplash.com/photo-1526506118085-60ce8714f8c5?w=600&q=80",
-  "https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?w=600&q=80",
-  "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=600&q=80",
-  "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?w=600&q=80",
+  // Gym & Weightlifting
+  "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=360&q=55",
+  "https://images.unsplash.com/photo-1549476464-37392f717541?w=360&q=55",
+  "https://images.unsplash.com/photo-1574680096145-d05b474e2155?w=360&q=55",
+  "https://images.unsplash.com/photo-1518611012118-696072aa579a?w=360&q=55",
+  "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=360&q=55",
+  "https://images.unsplash.com/photo-1526506118085-60ce8714f8c5?w=360&q=55",
+  "https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?w=360&q=55",
+  "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=360&q=55",
+  "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?w=360&q=55",
+  "https://images.unsplash.com/photo-1605296867424-35fc25c9212a?w=360&q=55",
+  // Boxing & Combat
+  "https://images.unsplash.com/photo-1549719386-74dfcbf7dbed?w=360&q=55",
+  "https://images.unsplash.com/photo-1615117950532-1f0252ad0a44?w=360&q=55",
+  "https://images.unsplash.com/photo-1517438322307-e67111335449?w=360&q=55",
+  // Running & Cardio
+  "https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=360&q=55",
+  "https://images.unsplash.com/photo-1486218119243-13883505764c?w=360&q=55",
+  "https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=360&q=55",
+  "https://images.unsplash.com/photo-1461896836934-bd45ba7d5820?w=360&q=55",
+  "https://images.unsplash.com/photo-1571008887538-b36bb32f4571?w=360&q=55",
+  // Yoga & Meditation
+  "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=360&q=55",
+  "https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=360&q=55",
+  "https://images.unsplash.com/photo-1545389336-cf090694435e?w=360&q=55",
+  // Crossfit & HIIT
+  "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?w=360&q=55",
+  "https://images.unsplash.com/photo-1556817411-31ae72fa3ea0?w=360&q=55",
+  "https://images.unsplash.com/photo-1599058917765-a780eda07a3e?w=360&q=55",
+  "https://images.unsplash.com/photo-1550345332-09e3ac987658?w=360&q=55",
+  // Nature & Mountains (discipline/adventure)
+  "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=360&q=55",
+  "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=360&q=55",
+  "https://images.unsplash.com/photo-1454496522488-7a8e488e8606?w=360&q=55",
+  "https://images.unsplash.com/photo-1483728642387-6c3bdd6c93e5?w=360&q=55",
+  "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=360&q=55",
+  // Focus & Workspace
+  "https://images.unsplash.com/photo-1488998427799-e3362cec87c3?w=360&q=55",
+  "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=360&q=55",
+  "https://images.unsplash.com/photo-1513258496099-48168024aec0?w=360&q=55",
+  // Dark moody / aesthetic
+  "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=360&q=55",
+  "https://images.unsplash.com/photo-1507400492013-162706c8c05e?w=360&q=55",
+  "https://images.unsplash.com/photo-1551632811-561732d1e306?w=360&q=55",
+  // Swimming & Water
+  "https://images.unsplash.com/photo-1530549387789-4c1017266635?w=360&q=55",
+  "https://images.unsplash.com/photo-1519315901367-f34ff9154487?w=360&q=55",
+  // Martial Arts
+  "https://images.unsplash.com/photo-1555597673-b21d5c935865?w=360&q=55",
+  "https://images.unsplash.com/photo-1564415315949-7a0c4c73aab4?w=360&q=55",
+  // Athletic / Sports
+  "https://images.unsplash.com/photo-1461897104016-0b3b00b1dce4?w=360&q=55",
+  "https://images.unsplash.com/photo-1517649763962-0c623066013b?w=360&q=55",
+  "https://images.unsplash.com/photo-1547483238-f400e65ccd56?w=360&q=55",
+  // Sunrise / Motivation
+  "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=360&q=55",
+  "https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?w=360&q=55",
+  "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=360&q=55",
+  // Night sky / Stars (cosmic theme)
+  "https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?w=360&q=55",
+  "https://images.unsplash.com/photo-1507400492013-162706c8c05e?w=360&q=55",
+  "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=360&q=55",
+  "https://images.unsplash.com/photo-1520034475321-cbe63696469a?w=360&q=55",
 ];
 
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
