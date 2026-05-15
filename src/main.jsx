@@ -21,6 +21,7 @@ const CONFIG = {
   appTimezone: RUNTIME_CONFIG.appTimezone || VITE_ENV.VITE_APP_TIMEZONE || "Asia/Kolkata",
   firebase: { ...ENV_FIREBASE, ...(RUNTIME_CONFIG.firebase || {}) }
 };
+const LOCAL_HERO_IMAGE = "/dayforge-visual.svg";
 
 const QUOTES = [
   "Discipline is the forge. Habits are the hammer. You are the blacksmith.",
@@ -142,8 +143,52 @@ function apiBase() { const c=String(CONFIG.apiBaseUrl||"").trim().replace(/\/$/,
 function hasFirebaseConfig() { const f=CONFIG.firebase||{}; return Boolean(f.apiKey&&f.authDomain&&f.projectId&&f.appId); }
 function normalizeHabit(h) { return { id:String(h.id||uid()), title:String(h.title||"New habit").slice(0,90), category:String(h.category||"Focus").slice(0,40), targetPerWeek:Math.max(1,Math.min(7,Number(h.targetPerWeek||h.target||5))), active:h.active!==false, createdAt:h.createdAt||new Date().toISOString() }; }
 function isLegacyDefaultHabit(h) { return LEGACY_DEFAULT_HABIT_IDS.has(String(h.id || "")); }
-function workspaceFor(user, habits, reminders = []) { return { profile: { displayName: user.displayName || user.email || "Warrior", mission: "Win the month." }, habits: habits.filter(h => !isLegacyDefaultHabit(h)), reminders, notificationSettings: { enabled: Boolean(user.email), email: user.email || "", timezone: CONFIG.appTimezone } }; }
+function defaultDisplayName(user) {
+  const raw = user?.displayName || user?.email?.split("@")[0] || "Champion";
+  return String(raw).trim() || "Champion";
+}
+function workspaceFor(user, habits, reminders = [], profile = {}, settings = {}) {
+  const email = settings.email || user?.email || "";
+  return {
+    profile: {
+      ...profile,
+      displayName: String(profile.displayName || defaultDisplayName(user)).trim().slice(0, 80),
+      mission: profile.mission || "Win the month.",
+    },
+    habits: habits.filter(h => !isLegacyDefaultHabit(h)),
+    reminders,
+    notificationSettings: {
+      ...settings,
+      enabled: Boolean(email),
+      email,
+      timezone: settings.timezone || CONFIG.appTimezone,
+    }
+  };
+}
 async function apiMessage(response, fallback) { try { const body = await response.json(); return body.detail || body.error || fallback; } catch { return fallback; } }
+function handleImageError(event) {
+  const image = event.currentTarget;
+  if (image.dataset.fallbackApplied) return;
+  image.dataset.fallbackApplied = "true";
+  image.src = LOCAL_HERO_IMAGE;
+}
+function prettyReminderDate(value) {
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  const today = toDateKey(new Date());
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  if (value === today) return "Today";
+  if (value === toDateKey(tomorrow)) return "Tomorrow";
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+function prettyReminderTime(value) {
+  const [hour = "09", minute = "00"] = String(value || "09:00").split(":");
+  const date = new Date();
+  date.setHours(Number(hour), Number(minute), 0, 0);
+  return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+function reminderStamp(reminder) { return `${reminder.date || ""}T${reminder.time || "00:00"}`; }
 
 function dayStats(checks={}, habits=[]) { const t=habits.length||1, d=habits.filter(h=>checks[h.id]).length; return {done:d,total:t,pct:Math.round((d/t)*100)}; }
 function buildMonthStats(grid,days,habits) { const daily=days.map(d=>dayStats(grid[toDateKey(d)]||{},habits)); const done=daily.reduce((s,i)=>s+i.done,0); const total=daily.reduce((s,i)=>s+i.total,0)||1; return {daily,done,total,pct:Math.round((done/total)*100)}; }
@@ -165,6 +210,10 @@ function App() {
   const [syncState, setSyncState] = useState("Waiting for sign in");
   const [habitDraft, setHabitDraft] = useState("");
   const [welcomeState, setWelcomeState] = useState("");
+  const [profile, setProfile] = useState({});
+  const [profileDraft, setProfileDraft] = useState("");
+  const [notificationSettings, setNotificationSettings] = useState({});
+  const [reminderState, setReminderState] = useState("Mail standby");
   const [heroImg] = useState(() => pick(HERO_IMAGES));
   const [quote] = useState(() => pick(QUOTES));
   const [missionLine] = useState(() => pick(MISSION_LINES));
@@ -188,13 +237,26 @@ function App() {
   useEffect(() => {
     if (!user) return;
     const localWorkspace = readLocalWorkspace(user.uid);
+    const localProfile = localWorkspace.profile || {};
+    const nextProfile = { ...localProfile, displayName: localProfile.displayName || defaultDisplayName(user) };
+    const localSettings = localWorkspace.notificationSettings || {};
     const localHabits = (localWorkspace.habits || []).map(normalizeHabit).filter(h => !isLegacyDefaultHabit(h));
+    setProfile(nextProfile);
+    setProfileDraft(nextProfile.displayName || defaultDisplayName(user));
+    setNotificationSettings(localSettings);
+    setReminders(localWorkspace.reminders || []);
     setHabits(localHabits);
     setGrid(readLocal(user.uid, monthId));
     syncFromBackend();
     sendWelcomeEmail();
   }, [user, monthId]);
   useEffect(() => { if (!user) return; writeLocal(user.uid, monthId, grid); }, [grid, monthId, user]);
+  useEffect(() => {
+    if (!user) return;
+    checkDueReminders();
+    const timer = window.setInterval(() => checkDueReminders(), 60000);
+    return () => window.clearInterval(timer);
+  }, [user, reminders.length]);
 
   async function authHeaders() {
     const h = { "Content-Type": "application/json", "X-Demo-User": user?.uid || "dayforge-local" };
@@ -214,6 +276,17 @@ function App() {
         setHabits(wh);
         writeLocalWorkspace(user.uid, { ...(p.workspace || {}), habits: wh });
       }
+      const remoteProfile = p.workspace?.profile || {};
+      const nextProfile = { ...profile, ...remoteProfile, displayName: remoteProfile.displayName || profile.displayName || defaultDisplayName(user) };
+      const nextSettings = {
+        ...notificationSettings,
+        ...(p.workspace?.notificationSettings || {}),
+        email: p.workspace?.notificationSettings?.email || user.email || notificationSettings.email || "",
+        timezone: p.workspace?.notificationSettings?.timezone || CONFIG.appTimezone,
+      };
+      setProfile(nextProfile);
+      setProfileDraft(nextProfile.displayName || defaultDisplayName(user));
+      setNotificationSettings(nextSettings);
       setReminders(p.workspace?.reminders || []);
       const ng = {};
       days.forEach(d => { const k = toDateKey(d); ng[k] = p.days?.[k]?.habitChecks || {}; });
@@ -224,7 +297,7 @@ function App() {
 
   async function saveWorkspace(nh) {
     if (!user) return;
-    const workspace = workspaceFor(user, nh, reminders);
+    const workspace = workspaceFor(user, nh, reminders, profile, notificationSettings);
     writeLocalWorkspace(user.uid, workspace);
     try {
       const r = await fetch(`${apiBase()}/api/workspace`, {
@@ -233,7 +306,11 @@ function App() {
       });
       if (!r.ok) throw new Error(await apiMessage(r, `Workspace save failed (${r.status})`));
       const p = await r.json();
-      if (p.workspace) writeLocalWorkspace(user.uid, p.workspace);
+      if (p.workspace) {
+        writeLocalWorkspace(user.uid, p.workspace);
+        setProfile(p.workspace.profile || workspace.profile);
+        setNotificationSettings(p.workspace.notificationSettings || workspace.notificationSettings);
+      }
       setSyncState(`Habits saved: ${p.store || "backend"}`);
     } catch (error) { setSyncState(`Saved locally: ${error.message}`); }
   }
@@ -243,9 +320,11 @@ function App() {
     if (!user.email) { setWelcomeState("No Google email found"); return; }
     try {
       setWelcomeState("Sending welcome...");
-      const r = await fetch(`${apiBase()}/api/notifications/welcome`, { method: "POST", headers: await authHeaders(), body: JSON.stringify({ email: user.email, displayName: user.displayName || "Warrior" }) });
+      const r = await fetch(`${apiBase()}/api/notifications/welcome`, { method: "POST", headers: await authHeaders(), body: JSON.stringify({ email: user.email, displayName: profile.displayName || user.displayName || defaultDisplayName(user) }) });
       if (!r.ok) throw new Error(await apiMessage(r, `Welcome failed (${r.status})`));
       const p = await r.json();
+      setProfile(current => ({ ...current, displayName: current.displayName || defaultDisplayName(user), welcomeEmailSentAt: p.sentAt || current.welcomeEmailSentAt }));
+      setNotificationSettings(current => ({ ...current, enabled: true, email: current.email || user.email, timezone: current.timezone || CONFIG.appTimezone }));
       setWelcomeState(p.alreadySent ? "Welcome already sent" : "Welcome sent");
     } catch (error) { setWelcomeState(`Welcome failed: ${error.message}`); }
   }
@@ -280,13 +359,14 @@ function App() {
     setHabits(nh); saveWorkspace(nh);
   }
 
-  function addReminder(e) {
+  async function addReminder(e) {
     e.preventDefault();
     const t = reminderDraft.title.trim(); if (!t) return;
     const nr = [...reminders, { id: uid(), title: t, date: reminderDraft.date, time: reminderDraft.time, category: "focus", notify: true, done: false, createdAt: new Date().toISOString() }];
     setReminders(nr);
     setReminderDraft({ title: "", date: toDateKey(new Date()), time: "09:00" });
-    saveWorkspaceWithReminders(nr);
+    await saveWorkspaceWithReminders(nr);
+    await checkDueReminders(true);
   }
 
   function deleteReminder(rid) {
@@ -297,7 +377,7 @@ function App() {
 
   async function saveWorkspaceWithReminders(nr) {
     if (!user) return;
-    const workspace = workspaceFor(user, habits, nr);
+    const workspace = workspaceFor(user, habits, nr, profile, notificationSettings);
     writeLocalWorkspace(user.uid, workspace);
     try {
       const r = await fetch(`${apiBase()}/api/workspace`, {
@@ -305,8 +385,66 @@ function App() {
         body: JSON.stringify({ workspace })
       });
       if (!r.ok) throw new Error(await apiMessage(r, `Save failed (${r.status})`));
+      const p = await r.json();
+      if (p.workspace) {
+        writeLocalWorkspace(user.uid, p.workspace);
+        setProfile(p.workspace.profile || workspace.profile);
+        setNotificationSettings(p.workspace.notificationSettings || workspace.notificationSettings);
+      }
       setSyncState("Reminders saved");
     } catch (error) { setSyncState(`Saved locally: ${error.message}`); }
+  }
+
+  async function saveProfileName(e) {
+    e.preventDefault();
+    if (!user) return;
+    const name = profileDraft.trim();
+    if (!name) return;
+    const nextProfile = { ...profile, displayName: name };
+    const workspace = workspaceFor(user, habits, reminders, nextProfile, notificationSettings);
+    setProfile(nextProfile);
+    writeLocalWorkspace(user.uid, workspace);
+    try {
+      const r = await fetch(`${apiBase()}/api/workspace`, {
+        method: "PUT", headers: await authHeaders(),
+        body: JSON.stringify({ workspace })
+      });
+      if (!r.ok) throw new Error(await apiMessage(r, `Profile save failed (${r.status})`));
+      const p = await r.json();
+      if (p.workspace) {
+        writeLocalWorkspace(user.uid, p.workspace);
+        setProfile(p.workspace.profile || workspace.profile);
+        setNotificationSettings(p.workspace.notificationSettings || workspace.notificationSettings);
+      }
+      setSyncState("Profile saved");
+    } catch (error) {
+      setSyncState(`Profile saved locally: ${error.message}`);
+    }
+  }
+
+  async function checkDueReminders(force = false) {
+    if (!user || (!force && reminders.length === 0)) {
+      if (user) setReminderState("Mail armed");
+      return;
+    }
+    try {
+      setReminderState("Checking mail");
+      const r = await fetch(`${apiBase()}/api/notifications/my-due?window_minutes=180`, {
+        method: "POST",
+        headers: await authHeaders(),
+        body: JSON.stringify({})
+      });
+      if (!r.ok) throw new Error(await apiMessage(r, `Reminder check failed (${r.status})`));
+      const p = await r.json();
+      if (!p.ok) throw new Error(p.failures?.[0]?.error || "Reminder mail provider rejected the send.");
+      if (p.workspace?.reminders) {
+        setReminders(p.workspace.reminders);
+        writeLocalWorkspace(user.uid, p.workspace);
+      }
+      setReminderState(p.sent ? `${p.sent} email sent` : "Mail armed");
+    } catch (error) {
+      setReminderState(`Mail paused`);
+    }
   }
 
   async function handleAuth() { if (!auth) return; if (auth.currentUser) await signOut(auth); else await signInWithPopup(auth, new GoogleAuthProvider()); }
@@ -314,7 +452,7 @@ function App() {
   if (!authReady) return (
     <div className="gate-screen">
       <div className="loading-splash">
-        <div className="loading-bg"><img src={heroImg} alt="" onError={e => {e.target.style.display='none'}} /></div>
+        <div className="loading-bg"><img src={heroImg} alt="" onError={handleImageError} /></div>
         <div className="loading-content">
           <div className="loading-ring">
             <svg viewBox="0 0 100 100" width="90" height="90">
@@ -354,7 +492,7 @@ function App() {
             <small className="gate-status">{syncState}</small>
           </div>
           <div className="gate-visual">
-            <img src={heroImg} alt="" onError={e => {e.target.style.display='none'}} />
+            <img src={heroImg} alt="" onError={handleImageError} />
           </div>
         </section>
       </div>
@@ -369,6 +507,13 @@ function App() {
             <span className="gate-kicker">Almost there</span>
             <h1>Add your first habit to unlock the dashboard.</h1>
             <p>Start with one real habit. Your heatmap, streaks, and reminders activate once you add it.</p>
+            <form className="name-capture" onSubmit={saveProfileName}>
+              <label>
+                <span>Your name</span>
+                <input value={profileDraft} onChange={e => setProfileDraft(e.target.value)} placeholder="Yogender" maxLength={80} />
+              </label>
+              <button type="submit">Save</button>
+            </form>
             <form className="first-habit-form" onSubmit={addHabit}>
               <input value={habitDraft} onChange={e => setHabitDraft(e.target.value)} placeholder="e.g. Study for 45 minutes" maxLength={80} autoFocus />
               <button type="submit">Launch</button>
@@ -384,7 +529,7 @@ function App() {
             </div>
             <small>{syncState}</small>
           </div>
-          <img src={heroImg} alt="" onError={e => {e.target.style.display='none'}} />
+          <img src={heroImg} alt="" onError={handleImageError} />
         </section>
       </div>
     );
@@ -398,6 +543,9 @@ function App() {
   const ls = longestStreak(grid, activeHabits);
   const fs = focusScore(grid, days, activeHabits);
   const rows = habitRows(grid, days, activeHabits);
+  const displayName = profile.displayName || defaultDisplayName(user);
+  const firstName = displayName.split(" ")[0] || displayName;
+  const initials = displayName.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]?.toUpperCase()).join("") || "D";
 
   return (
     <main className="forge-screen">
@@ -407,6 +555,14 @@ function App() {
           <h1>{monthDate.toLocaleDateString("en-US", { month: "long" })}</h1>
           <span>Day Forge Tracker</span>
         </div>
+        <form className="profile-card" onSubmit={saveProfileName}>
+          <div className="profile-avatar">{initials}</div>
+          <div className="profile-copy">
+            <span>Welcome back</span>
+            <input value={profileDraft} onChange={e => setProfileDraft(e.target.value)} placeholder="Your name" maxLength={80} aria-label="Your name" />
+          </div>
+          <button type="submit" title="Save profile name">Save</button>
+        </form>
         <div className="select-row">
           <label>Month<select value={monthDate.getMonth()} onChange={e => setMonthDate(new Date(monthDate.getFullYear(), Number(e.target.value), 1))}>
             {Array.from({length:12},(_,i)=><option key={i} value={i}>{new Date(2026,i,1).toLocaleDateString("en-US",{month:"long"})}</option>)}
@@ -416,7 +572,7 @@ function App() {
           </select></label>
         </div>
         <figure className="focus-card">
-          <img src={heroImg} alt="" onError={e => {e.target.style.display='none'}} />
+          <img src={heroImg} alt="" onError={handleImageError} />
           <figcaption>&ldquo; {quote} &rdquo;</figcaption>
         </figure>
         <div className="habit-list-card">
@@ -440,7 +596,7 @@ function App() {
 
       {/* CENTER PANEL */}
       <section className="center-panel" style={{"--days": days.length}}>
-        <MissionBanner missionLine={missionLine} pct={ms.pct} todayStats={todayStats} cs={cs} ws={ws} activeHabits={activeHabits} />
+        <MissionBanner missionLine={missionLine} pct={ms.pct} firstName={firstName} todayStats={todayStats} cs={cs} ws={ws} activeHabits={activeHabits} />
         <ProgressBar pct={ms.pct} done={ms.done} total={ms.total} daysCount={days.length} />
         <Heatmap days={days} grid={grid} habits={activeHabits} todayKey={todayKey} selectedDate={selectedDate} onSelect={setSelectedDate} onToggle={toggleHabit} monthDate={monthDate} />
         <WeeklySection weeks={ws} />
@@ -455,7 +611,7 @@ function App() {
           <div className="stat-card"><div className="stat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="#22d3ee"/></svg></div><span className="stat-value">{fs}</span><div className="stat-label">Focus Score</div></div>
         </div>
         <TopHabitsCard rows={rows} />
-        <ReminderCard reminders={reminders} draft={reminderDraft} setDraft={setReminderDraft} onAdd={addReminder} onDelete={deleteReminder} />
+        <ReminderCard reminders={reminders} draft={reminderDraft} setDraft={setReminderDraft} onAdd={addReminder} onDelete={deleteReminder} status={reminderState} />
         <DailyProgressCard rows={rows} daysCount={days.length} />
         <div className="quote-strip">{pick(BOTTOM_QUOTES)}</div>
       </section>
@@ -475,12 +631,12 @@ function Ring({ value, size = 80 }) {
   );
 }
 
-function MissionBanner({ missionLine, pct, todayStats, cs, ws, activeHabits }) {
+function MissionBanner({ missionLine, pct, firstName, todayStats, cs, ws, activeHabits }) {
   return (
     <div className="mission-banner">
       <div>
         <div className="mission-kicker">Today's Mission</div>
-        <h2>{missionLine}</h2>
+        <h2>{firstName}, {missionLine.charAt(0).toLowerCase() + missionLine.slice(1)}</h2>
         <p>Stay consistent. Every checked habit compounds into something extraordinary.</p>
       </div>
       <div className="mission-ring"><Ring value={pct} size={90} /></div>
@@ -635,8 +791,12 @@ function DailyProgressCard({ rows, daysCount }) {
 }
 
 
-function ReminderCard({ reminders, draft, setDraft, onAdd, onDelete }) {
-  const sorted = [...reminders].sort((a, b) => (a.date + "T" + a.time).localeCompare(b.date + "T" + b.time));
+function ReminderCard({ reminders, draft, setDraft, onAdd, onDelete, status }) {
+  const sorted = [...reminders].sort((a, b) => reminderStamp(a).localeCompare(reminderStamp(b)));
+  const today = toDateKey(new Date());
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const next = sorted.find(r => !r.done);
   return (
     <div className="reminder-card">
       <div className="card-header">
@@ -646,21 +806,45 @@ function ReminderCard({ reminders, draft, setDraft, onAdd, onDelete }) {
           </svg>
           Reminders
         </h3>
-        <span className="view-all" style={{color:'var(--amber)'}}>{reminders.length} set</span>
+        <span className="reminder-status"><i />{status}</span>
+      </div>
+      <div className="reminder-summary">
+        <span>{reminders.length} set</span>
+        <strong>{next ? `${prettyReminderDate(next.date)} at ${prettyReminderTime(next.time)}` : "No upcoming reminder"}</strong>
       </div>
       <form className="reminder-form" onSubmit={onAdd}>
-        <input placeholder="Reminder title" value={draft.title} onChange={e => setDraft({...draft, title: e.target.value})} maxLength={60} required />
-        <input type="date" value={draft.date} onChange={e => setDraft({...draft, date: e.target.value})} required />
-        <input type="time" value={draft.time} onChange={e => setDraft({...draft, time: e.target.value})} required />
-        <button type="submit">+</button>
+        <label className="reminder-title-field">
+          <span>Title</span>
+          <input placeholder="Wake up bro" value={draft.title} onChange={e => setDraft({...draft, title: e.target.value})} maxLength={60} required />
+        </label>
+        <label className="reminder-field">
+          <span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 2v4M16 2v4M3 10h18"/><rect x="3" y="4" width="18" height="18" rx="3"/></svg>
+            Date
+          </span>
+          <input type="date" value={draft.date} onChange={e => setDraft({...draft, date: e.target.value})} required />
+        </label>
+        <label className="reminder-field">
+          <span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            Time
+          </span>
+          <input type="time" value={draft.time} onChange={e => setDraft({...draft, time: e.target.value})} required />
+        </label>
+        <button className="reminder-add" type="submit" title="Add reminder">+</button>
       </form>
+      <div className="reminder-quick-row">
+        <button type="button" onClick={() => setDraft({...draft, date: today})}>Today</button>
+        <button type="button" onClick={() => setDraft({...draft, date: toDateKey(tomorrow)})}>Tomorrow</button>
+        <button type="button" onClick={() => setDraft({...draft, time: "21:00"})}>9 PM</button>
+      </div>
       <div className="reminder-list">
-        {sorted.length === 0 && <div className="reminder-empty">No reminders yet. Add one to get email notifications!</div>}
+        {sorted.length === 0 && <div className="reminder-empty">No reminders yet. Add one to get email notifications.</div>}
         {sorted.map(r => (
           <div className="reminder-item" key={r.id}>
             <span className="r-title">{r.title}</span>
-            <span className="r-time">{r.time}</span>
-            <span className="r-date">{r.date}</span>
+            <span className="r-date">{prettyReminderDate(r.date)}</span>
+            <span className="r-time">{prettyReminderTime(r.time)}</span>
             <button className="r-del" type="button" onClick={() => onDelete(r.id)} title="Delete">&times;</button>
           </div>
         ))}

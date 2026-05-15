@@ -867,6 +867,69 @@ async def send_welcome_notification(request: Request, user=Depends(require_user)
     return {"ok": True, "provider": "resend", "result": result, "sentAt": profile["welcomeEmailSentAt"]}
 
 
+@app.post("/api/notifications/my-due")
+async def send_my_due_notifications(
+    window_minutes: int = Query(default=180, ge=1, le=720),
+    user=Depends(require_user),
+):
+    workspace, _ = storage.read_workspace(user["uid"])
+    settings = workspace.get("notificationSettings", {})
+    previous_settings = dict(settings)
+    email_address = clean_text(settings.get("email") or user.get("email"), 180)
+
+    if not email_address:
+        raise HTTPException(status_code=400, detail="Add an email address before reminder emails can be sent.")
+
+    settings["email"] = email_address
+    settings["enabled"] = True
+    settings["timezone"] = settings.get("timezone") or os.getenv("APP_TIMEZONE", "Asia/Kolkata")
+
+    if not settings.get("enabled"):
+        return {"ok": True, "sent": 0, "skipped": 1, "failures": [], "workspace": workspace}
+
+    local_now = local_dt_for(settings)
+    sent = 0
+    failures = []
+    changed = settings != previous_settings
+
+    for reminder in workspace.get("reminders", []):
+        notify_key = f"{reminder.get('date')}T{reminder.get('time')}"
+        if reminder.get("lastNotifiedKey") == notify_key:
+            continue
+        if not reminder_is_due(local_now, reminder, window_minutes):
+            continue
+
+        try:
+            resend.send_email(
+                email_address,
+                f"Reminder: {reminder['title']}",
+                notification_html(
+                    reminder["title"],
+                    reminder.get("notes") or "This is the thing future-you asked current-you to remember.",
+                    [
+                        f"Time: {reminder['date']} at {reminder['time']}",
+                        f"Category: {reminder.get('category', 'focus')}",
+                        "Open DayForge and mark the next step done.",
+                    ],
+                ),
+            )
+            reminder["lastNotifiedKey"] = notify_key
+            reminder["updatedAt"] = utc_now().isoformat()
+            sent += 1
+            changed = True
+        except RuntimeError as exc:
+            failures.append({"userId": user["uid"], "error": str(exc)})
+
+    workspace["notificationSettings"] = settings
+    if changed:
+        try:
+            _, workspace = storage.put_workspace(user["uid"], workspace)
+        except RuntimeError as exc:
+            failures.append({"userId": user["uid"], "error": str(exc)})
+
+    return {"ok": not failures, "sent": sent, "skipped": 0, "failures": failures[:10], "workspace": workspace}
+
+
 @app.post("/api/notifications/due")
 async def send_due_notifications(
     x_cron_secret: str = Header(default=""),
