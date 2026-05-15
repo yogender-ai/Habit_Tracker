@@ -314,15 +314,23 @@ function App() {
   if (!authReady) return (
     <div className="gate-screen">
       <div className="loading-splash">
-        <div className="loading-ring">
-          <svg viewBox="0 0 100 100" width="80" height="80">
-            <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(167,139,250,0.1)" strokeWidth="4"/>
-            <circle cx="50" cy="50" r="42" fill="none" stroke="url(#loadGrad)" strokeWidth="4" strokeLinecap="round" strokeDasharray="60 200" className="loading-arc"/>
-            <defs><linearGradient id="loadGrad"><stop offset="0%" stopColor="#818cf8"/><stop offset="100%" stopColor="#f472b6"/></linearGradient></defs>
-          </svg>
+        <div className="loading-bg"><img src={heroImg} alt="" onError={e => {e.target.style.display='none'}} /></div>
+        <div className="loading-content">
+          <div className="loading-ring">
+            <svg viewBox="0 0 100 100" width="90" height="90">
+              <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(167,139,250,0.08)" strokeWidth="3"/>
+              <circle cx="50" cy="50" r="42" fill="none" stroke="url(#loadGrad)" strokeWidth="3.5" strokeLinecap="round" strokeDasharray="60 200" className="loading-arc"/>
+              <defs><linearGradient id="loadGrad"><stop offset="0%" stopColor="#818cf8"/><stop offset="100%" stopColor="#f472b6"/></linearGradient></defs>
+            </svg>
+          </div>
+          <h1 className="loading-brand">DayForge</h1>
+          <p className="loading-tagline">Forging your discipline engine<span className="loading-dots"><span>.</span><span>.</span><span>.</span></span></p>
+          <div className="loading-pills">
+            <span>Heatmap</span>
+            <span>Streaks</span>
+            <span>Reminders</span>
+          </div>
         </div>
-        <h1 className="loading-brand">DayForge</h1>
-        <p className="loading-tagline">Forging your discipline engine<span className="loading-dots"><span>.</span><span>.</span><span>.</span></span></p>
       </div>
     </div>
   );
