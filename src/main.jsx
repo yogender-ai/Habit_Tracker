@@ -283,7 +283,7 @@ function App() {
   function addReminder(e) {
     e.preventDefault();
     const t = reminderDraft.title.trim(); if (!t) return;
-    const nr = [...reminders, { id: uid(), title: t, date: reminderDraft.date, time: reminderDraft.time, category: "focus", done: false, createdAt: new Date().toISOString() }];
+    const nr = [...reminders, { id: uid(), title: t, date: reminderDraft.date, time: reminderDraft.time, category: "focus", notify: true, done: false, createdAt: new Date().toISOString() }];
     setReminders(nr);
     setReminderDraft({ title: "", date: toDateKey(new Date()), time: "09:00" });
     saveWorkspaceWithReminders(nr);
@@ -417,13 +417,13 @@ function App() {
         </div>
         <figure className="focus-card">
           <img src={heroImg} alt="" onError={e => {e.target.style.display='none'}} />
-          <figcaption>â {quote} âž</figcaption>
+          <figcaption>&ldquo; {quote} &rdquo;</figcaption>
         </figure>
         <div className="habit-list-card">
-          <h2>âœ¦ Daily Habits</h2>
+          <h2>Daily Habits</h2>
           <ol>
             {activeHabits.map(h => (
-              <li key={h.id}><span>{h.title}</span><button type="button" onClick={() => deleteHabit(h.id)} aria-label={`Delete ${h.title}`}>Ã—</button></li>
+              <li key={h.id}><span>{h.title}</span><button type="button" onClick={() => deleteHabit(h.id)} aria-label={`Delete ${h.title}`}>&times;</button></li>
             ))}
           </ol>
         </div>
@@ -457,7 +457,7 @@ function App() {
         <TopHabitsCard rows={rows} />
         <ReminderCard reminders={reminders} draft={reminderDraft} setDraft={setReminderDraft} onAdd={addReminder} onDelete={deleteReminder} />
         <DailyProgressCard rows={rows} daysCount={days.length} />
-        <div className="quote-strip">âœ¦ {pick(BOTTOM_QUOTES)} âœ¦</div>
+        <div className="quote-strip">{pick(BOTTOM_QUOTES)}</div>
       </section>
     </main>
   );
@@ -502,61 +502,53 @@ function ProgressBar({ pct, done, total, daysCount }) {
 }
 
 function Heatmap({ days, grid, habits, todayKey, selectedDate, onSelect, onToggle, monthDate }) {
-  const weekdays = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
   const selectedChecks = grid[selectedDate] || {};
   const selectedStats = dayStats(selectedChecks, habits);
-
-  function cellLevel(d) {
-    const k = toDateKey(d), c = grid[k] || {};
-    const done = habits.filter(h => c[h.id]).length;
-    if (!habits.length || done === 0) return 0;
-    const r = done / habits.length;
-    if (r <= 0.25) return 1; if (r <= 0.5) return 2; if (r <= 0.75) return 3; if (r < 1) return 4; return 5;
-  }
-
-  // Build a 7-row x N-col grid where each day goes into its weekday row
-  const firstDow = (days[0].getDay() + 6) % 7; // 0=Mon
-  const totalCols = days.length;
-
   return (
-    <div className="heatmap-card" style={{"--days": totalCols}}>
-      <div className="heatmap-title">{monthDate.toLocaleDateString("en-US",{month:"long",year:"numeric"})} - Consistency Heatmap</div>
+    <div className="heatmap-card" style={{"--days": days.length}}>
+      <div className="heatmap-title">{monthDate.toLocaleDateString("en-US",{month:"long",year:"numeric"})} - Habit Tracker</div>
       <div className="heatmap-grid">
-        {/* Column headers: day numbers */}
         <div className="day-label"></div>
         {days.map(d => {
           const k = toDateKey(d);
           return <div key={k} className={`col-header ${k === todayKey ? "today-col" : ""}`}>{d.getDate()}</div>;
         })}
-
-        {/* Weekday rows */}
-        {weekdays.map((wd, wi) => (
-          <React.Fragment key={wd}>
-            <div className="day-label">{wd}</div>
+        {habits.map(h => (
+          <React.Fragment key={h.id}>
+            <div className="day-label habit-label" title={h.title}>{h.title.length > 6 ? h.title.slice(0,6) + ".." : h.title}</div>
             {days.map(d => {
-              const dow = (d.getDay() + 6) % 7;
               const k = toDateKey(d);
-              if (dow !== wi) return <div key={k} className="heatmap-cell lv0" style={{opacity:0,pointerEvents:'none'}} />;
-              const lv = cellLevel(d);
-              const st = dayStats(grid[k]||{}, habits);
+              const checked = Boolean((grid[k] || {})[h.id]);
               return (
                 <button key={k}
-                  className={`heatmap-cell lv${lv} ${k === todayKey ? "today" : ""} ${k === selectedDate ? "selected" : ""}`}
-                  onClick={() => onSelect(k)}
-                  title={`${k}: ${st.done}/${st.total}`}
+                  className={`heatmap-cell ${checked ? "habit-done" : "habit-miss"} ${k === todayKey ? "today" : ""} ${k === selectedDate ? "selected" : ""}`}
+                  onClick={() => onToggle(k, h.id)}
+                  title={`${h.title} - ${k}: ${checked ? "Done" : "Not done"}`}
                 />
               );
             })}
           </React.Fragment>
         ))}
+        <div className="day-label" style={{fontWeight:800,color:'var(--muted)'}}>All</div>
+        {days.map(d => {
+          const k = toDateKey(d);
+          const c = grid[k] || {};
+          const done = habits.filter(h => c[h.id]).length;
+          const pct = habits.length ? done / habits.length : 0;
+          const lv = pct === 0 ? 0 : pct <= 0.25 ? 1 : pct <= 0.5 ? 2 : pct <= 0.75 ? 3 : pct < 1 ? 4 : 5;
+          return (
+            <button key={k}
+              className={`heatmap-cell lv${lv} ${k === todayKey ? "today" : ""} ${k === selectedDate ? "selected" : ""}`}
+              onClick={() => onSelect(k)}
+              title={`${k}: ${done}/${habits.length}`}
+            />
+          );
+        })}
       </div>
       <div className="heatmap-legend">
-        <span><i className="heatmap-cell lv0" style={{display:'inline-block'}} /> 0%</span>
-        <span><i className="heatmap-cell lv1" style={{display:'inline-block'}} /> 1-25%</span>
-        <span><i className="heatmap-cell lv2" style={{display:'inline-block'}} /> 26-50%</span>
-        <span><i className="heatmap-cell lv3" style={{display:'inline-block'}} /> 51-75%</span>
-        <span><i className="heatmap-cell lv4" style={{display:'inline-block'}} /> 76-99%</span>
-        <span><i className="heatmap-cell lv5" style={{display:'inline-block'}} /> 100%</span>
+        <span><i className="heatmap-cell habit-done" style={{display:'inline-block'}} /> Done</span>
+        <span><i className="heatmap-cell habit-miss" style={{display:'inline-block'}} /> Not done</span>
+        <span style={{marginLeft:'auto',color:'var(--muted)'}}>Bottom = overall</span>
       </div>
       <div className="selected-day-panel">
         <div className="selected-day-head">

@@ -355,6 +355,9 @@ input:focus,select:focus{border-color:var(--purple)}
   border:1px solid transparent;position:relative;
 }
 .heatmap-cell:hover{transform:scale(1.5);z-index:5;border-color:var(--purple);box-shadow:0 0 14px var(--purple-glow)}
+.heatmap-cell.habit-done{background:rgba(52,211,153,0.35);border-color:rgba(52,211,153,0.18);box-shadow:0 0 4px rgba(52,211,153,0.1)}
+.heatmap-cell.habit-miss{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.04)}
+.habit-label{font-size:7px !important;color:var(--ink) !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .heatmap-cell.lv0{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.04)}
 .heatmap-cell.lv1{background:rgba(167,139,250,0.18);border-color:rgba(167,139,250,0.08)}
 .heatmap-cell.lv2{background:rgba(167,139,250,0.32);border-color:rgba(167,139,250,0.18)}

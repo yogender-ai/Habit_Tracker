@@ -29,3 +29,9 @@ services:
         sync: false
       - key: NOTIFICATION_CRON_SECRET
         sync: false
+
+# Cron job to send reminder emails every 15 minutes
+# Render cron jobs are paid-only. For free tier, use external cron:
+# - cron-job.org (free) → POST https://dayforge-api.onrender.com/api/notifications/due
+#   with header: x-cron-secret: <your NOTIFICATION_CRON_SECRET value>
+#   schedule: */15 * * * *
