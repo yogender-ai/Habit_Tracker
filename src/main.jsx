@@ -146,7 +146,7 @@ function readPrivacySettings(u) { return readLocal(u, "privacy"); }
 function writePrivacySettings(u, settings) { writeLocal(u, "privacy", settings); }
 function apiBase() { const c=String(CONFIG.apiBaseUrl||"").trim().replace(/\/$/,""); if(c) return c; if(location.hostname==="127.0.0.1"||location.hostname==="localhost") return "http://127.0.0.1:8000"; return location.origin; }
 function hasFirebaseConfig() { const f=CONFIG.firebase||{}; return Boolean(f.apiKey&&f.authDomain&&f.projectId&&f.appId); }
-function normalizeHabit(h) { return { id:String(h.id||uid()), title:String(h.title||"New habit").slice(0,90), category:String(h.category||"Focus").slice(0,40), targetPerWeek:Math.max(1,Math.min(7,Number(h.targetPerWeek||h.target||5))), active:h.active!==false, createdAt:h.createdAt||new Date().toISOString() }; }
+function normalizeHabit(h) { return { id:String(h.id||uid()), title:String(h.title||"New habit").slice(0,90), category:String(h.category||"Focus").slice(0,40), targetPerWeek:Math.max(1,Math.min(7,Number(h.targetPerWeek||h.target||5))), active:h.active!==false, createdAt:h.createdAt||"1970-01-01T00:00:00.000Z", deletedAt:h.deletedAt||(h.active===false?(h.updatedAt||new Date().toISOString()):"") }; }
 function isLegacyDefaultHabit(h) { return LEGACY_DEFAULT_HABIT_IDS.has(String(h.id || "")); }
 function privacyIsEnabled(settings = {}) { return Boolean(settings.enabled && settings.pinHash && settings.salt); }
 function normalizePrivacySettings(settings = {}) {
@@ -266,12 +266,22 @@ async function hashPin(pin, salt) {
   return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, "0")).join("");
 }
 
-function dayStats(checks={}, habits=[]) { const t=habits.length||1, d=habits.filter(h=>checks[h.id]).length; return {done:d,total:t,pct:Math.round((d/t)*100)}; }
-function buildMonthStats(grid,days,habits) { const daily=days.map(d=>dayStats(grid[toDateKey(d)]||{},habits)); const done=daily.reduce((s,i)=>s+i.done,0); const total=daily.reduce((s,i)=>s+i.total,0)||1; return {daily,done,total,pct:Math.round((done/total)*100)}; }
+function habitBoundaryKey(value) { const d = new Date(value || "1970-01-01T00:00:00.000Z"); return Number.isNaN(d.getTime()) ? "1970-01-01" : toDateKey(dayforgeDate(d)); }
+function habitsForDate(habits = [], date) {
+  const key = typeof date === "string" ? date : toDateKey(date);
+  return habits.filter(h => {
+    if (isLegacyDefaultHabit(h)) return false;
+    const start = habitBoundaryKey(h.createdAt);
+    const end = h.deletedAt ? habitBoundaryKey(h.deletedAt) : "";
+    return start <= key && (!end || key < end);
+  });
+}
+function dayStats(checks={}, habits=[]) { const t=habits.length, d=habits.filter(h=>checks[h.id]).length; return {done:d,total:t,pct:t?Math.round((d/t)*100):0}; }
+function buildMonthStats(grid,days,habits) { const daily=days.map(d=>dayStats(grid[toDateKey(d)]||{},habitsForDate(habits,d))); const done=daily.reduce((s,i)=>s+i.done,0); const total=daily.reduce((s,i)=>s+i.total,0)||1; return {daily,done,total,pct:Math.round((done/total)*100)}; }
 function buildWeeklyStats(grid,days,habits) { const chunks=[]; for(let i=0;i<days.length;i+=7) chunks.push(days.slice(i,i+7)); return chunks.map((c,i)=>{const s=buildMonthStats(grid,c,habits); const f=c[0],l=c[c.length-1]; return {...s,label:`Week ${i+1}`,range:`${f.toLocaleDateString("en-US",{month:"short",day:"numeric"})} - ${l.toLocaleDateString("en-US",{month:"short",day:"numeric"})}`};}); }
-function habitRows(grid,days,habits) { return habits.map(h=>{const vals=days.map(d=>Boolean(grid[toDateKey(d)]?.[h.id])); const done=vals.filter(Boolean).length; let best=0,run=0; vals.forEach(v=>{run=v?run+1:0;best=Math.max(best,run)}); return {...h,done,total:days.length,pct:Math.round((done/days.length)*100),streak:best};}).sort((a,b)=>b.pct-a.pct||a.title.localeCompare(b.title)); }
-function currentStreak(grid,habits) { const today=dayforgeDate(); let streak=0; for(let i=0;i<365;i++){const d=new Date(today);d.setDate(d.getDate()-i); const k=toDateKey(d),c=grid[k]||{}; const done=habits.filter(h=>c[h.id]).length; if(done>0)streak++;else break;} return streak; }
-function longestStreak(grid,habits) { const today=dayforgeDate(); let best=0,run=0; for(let i=365;i>=0;i--){const d=new Date(today);d.setDate(d.getDate()-i); const k=toDateKey(d),c=grid[k]||{}; if(habits.filter(h=>c[h.id]).length>0){run++;best=Math.max(best,run)}else{run=0}} return best; }
+function habitRows(grid,days,habits) { return habits.map(h=>{const eligible=days.filter(d=>habitsForDate([h],d).length); const vals=eligible.map(d=>Boolean(grid[toDateKey(d)]?.[h.id])); const done=vals.filter(Boolean).length; let best=0,run=0; vals.forEach(v=>{run=v?run+1:0;best=Math.max(best,run)}); const total=eligible.length||1; return {...h,done,total,pct:Math.round((done/total)*100),streak:best};}).sort((a,b)=>b.pct-a.pct||a.title.localeCompare(b.title)); }
+function currentStreak(grid,habits) { const today=dayforgeDate(); let streak=0; for(let i=0;i<365;i++){const d=new Date(today);d.setDate(d.getDate()-i); const k=toDateKey(d),c=grid[k]||{}; const dayHabits=habitsForDate(habits,d); const done=dayHabits.filter(h=>c[h.id]).length; if(done>0)streak++;else break;} return streak; }
+function longestStreak(grid,habits) { const today=dayforgeDate(); let best=0,run=0; for(let i=365;i>=0;i--){const d=new Date(today);d.setDate(d.getDate()-i); const k=toDateKey(d),c=grid[k]||{}; const dayHabits=habitsForDate(habits,d); if(dayHabits.filter(h=>c[h.id]).length>0){run++;best=Math.max(best,run)}else{run=0}} return best; }
 function focusScore(grid,days,habits) { if(!habits.length)return 0; const ms=buildMonthStats(grid,days,habits); const cs=Math.min(currentStreak(grid,habits)*3,30); return Math.min(100,Math.round(ms.pct*0.7+cs)); }
 
 function App() {
@@ -288,6 +298,7 @@ function App() {
   const [welcomeState, setWelcomeState] = useState("");
   const [profile, setProfile] = useState({});
   const [profileDraft, setProfileDraft] = useState("");
+  const [profileEditing, setProfileEditing] = useState(false);
   const [notificationSettings, setNotificationSettings] = useState({});
   const [reminderState, setReminderState] = useState("Mail standby");
   const [privacyReady, setPrivacyReady] = useState(false);
@@ -307,7 +318,8 @@ function App() {
 
   const days = useMemo(() => monthDays(monthDate), [monthDate]);
   const monthId = monthKey(monthDate);
-  const activeHabits = habits.filter(h => h.active);
+  const trackedHabits = habits.filter(h => !isLegacyDefaultHabit(h));
+  const activeHabits = habitsForDate(trackedHabits, dayforgeTodayKey()).filter(h => h.active);
 
   useEffect(() => {
     if (!hasFirebaseConfig()) { setAuthReady(true); setSyncState("Firebase config missing"); return; }
@@ -390,8 +402,8 @@ function App() {
       const r = await fetch(`${apiBase()}/api/snapshot?year=${monthDate.getFullYear()}`, { headers: await authHeaders() });
       if (!r.ok) throw new Error(await apiMessage(r, `Snapshot failed (${r.status})`));
       const p = await r.json();
-      const wh = (p.workspace?.habits || []).map(normalizeHabit).filter(h => h.active && !isLegacyDefaultHabit(h));
-      const syncedHabits = wh.length ? wh : activeHabits;
+      const wh = (p.workspace?.habits || []).map(normalizeHabit).filter(h => !isLegacyDefaultHabit(h));
+      const syncedHabits = wh.length ? wh : trackedHabits;
       if (wh.length) {
         setHabits(wh);
         writeLocalWorkspace(user.uid, { ...(p.workspace || {}), habits: wh });
@@ -479,8 +491,21 @@ function App() {
     ];
   }
 
+  function canEditDay(dk) {
+    return dk === dayforgeTodayKey();
+  }
+
+  function showDayLocked(dk) {
+    const today = dayforgeTodayKey();
+    setSyncState(dk < today ? `History locked: ${dk}` : `Only today is editable: ${dk}`);
+  }
+
   async function pushDay(dk, checks, extrasByDay = dailyExtras) {
     if (!user) return;
+    if (!canEditDay(dk)) {
+      showDayLocked(dk);
+      return;
+    }
     try {
       const done = activeHabits.filter(h => checks[h.id]).length;
       const status = done === activeHabits.length ? "won" : done > 0 ? "neutral" : "missed";
@@ -494,11 +519,20 @@ function App() {
   }
 
   function toggleHabit(dk, hid) {
+    if (!canEditDay(dk)) {
+      setSelectedDate(dk);
+      showDayLocked(dk);
+      return;
+    }
     setGrid(c => { const nc = { ...(c[dk] || {}), [hid]: !c[dk]?.[hid] }; pushDay(dk, nc); return { ...c, [dk]: nc }; });
   }
 
   function addExtraItem(e) {
     e.preventDefault();
+    if (!canEditDay(selectedDate)) {
+      showDayLocked(selectedDate);
+      return;
+    }
     const item = normalizeExtraItem({ title: extraDraft, priority: "medium" });
     if (!item) return;
     const nextExtras = { ...dailyExtras, [selectedDate]: [...(dailyExtras[selectedDate] || []), item] };
@@ -508,6 +542,11 @@ function App() {
   }
 
   function toggleExtraItem(dateKey, itemId) {
+    if (!canEditDay(dateKey)) {
+      setSelectedDate(dateKey);
+      showDayLocked(dateKey);
+      return;
+    }
     const nextExtras = {
       ...dailyExtras,
       [dateKey]: (dailyExtras[dateKey] || []).map(item => item.id === itemId ? { ...item, done: !item.done } : item)
@@ -517,6 +556,11 @@ function App() {
   }
 
   function deleteExtraItem(dateKey, itemId) {
+    if (!canEditDay(dateKey)) {
+      setSelectedDate(dateKey);
+      showDayLocked(dateKey);
+      return;
+    }
     const nextItems = (dailyExtras[dateKey] || []).filter(item => item.id !== itemId);
     const nextExtras = { ...dailyExtras, [dateKey]: nextItems };
     if (!nextItems.length) delete nextExtras[dateKey];
@@ -527,12 +571,13 @@ function App() {
   function addHabit(e) {
     e.preventDefault();
     const t = habitDraft.trim(); if (!t) return;
-    const nh = [...activeHabits, normalizeHabit({ id: uid(), title: t, category: "Focus", targetPerWeek: 5, active: true })];
+    const nh = [...trackedHabits, normalizeHabit({ id: uid(), title: t, category: "Focus", targetPerWeek: 5, active: true, createdAt: new Date().toISOString() })];
     setHabits(nh); setHabitDraft(""); saveWorkspace(nh);
   }
 
   function deleteHabit(hid) {
-    const nh = habits.map(h => h.id === hid ? { ...h, active: false } : h);
+    const deletedAt = new Date().toISOString();
+    const nh = habits.map(h => h.id === hid ? { ...h, active: false, deletedAt } : h);
     setHabits(nh); saveWorkspace(nh);
   }
 
@@ -584,6 +629,7 @@ function App() {
     const nextProfile = { ...profile, displayName: name };
     const workspace = workspaceFor(user, habits, reminders, nextProfile, notificationSettings, privacySettings);
     setProfile(nextProfile);
+    setProfileEditing(false);
     writeLocalWorkspace(user.uid, workspace);
     try {
       const r = await fetch(`${apiBase()}/api/workspace`, {
@@ -837,14 +883,15 @@ function App() {
     );
   }
 
-  const ms = buildMonthStats(grid, days, activeHabits);
-  const ws = buildWeeklyStats(grid, days, activeHabits);
+  const ms = buildMonthStats(grid, days, trackedHabits);
+  const ws = buildWeeklyStats(grid, days, trackedHabits);
   const todayKey = dayforgeTodayKey();
   const todayStats = dayStats(grid[todayKey] || {}, activeHabits);
-  const cs = currentStreak(grid, activeHabits);
-  const ls = longestStreak(grid, activeHabits);
-  const fs = focusScore(grid, days, activeHabits);
+  const cs = currentStreak(grid, trackedHabits);
+  const ls = longestStreak(grid, trackedHabits);
+  const fs = focusScore(grid, days, trackedHabits);
   const rows = habitRows(grid, days, activeHabits);
+  const monthHabits = trackedHabits.filter(h => days.some(d => habitsForDate([h], d).length));
 
   return (
     <main className="forge-screen">
@@ -854,13 +901,25 @@ function App() {
           <h1>{monthDate.toLocaleDateString("en-US", { month: "long" })}</h1>
           <span>Day Forge Tracker</span>
         </div>
-        <form className="profile-card" onSubmit={saveProfileName}>
+        <form className={`profile-card ${profileEditing ? "editing" : ""}`} onSubmit={saveProfileName}>
           <div className="profile-avatar">{initials}</div>
           <div className="profile-copy">
             <span>Welcome back</span>
-            <input value={profileDraft} onChange={e => setProfileDraft(e.target.value)} placeholder="Your name" maxLength={80} aria-label="Your name" />
+            {profileEditing ? (
+              <input value={profileDraft} onChange={e => setProfileDraft(e.target.value)} placeholder="Your name" maxLength={80} aria-label="Your name" autoFocus onFocus={e => e.target.select()} />
+            ) : (
+              <strong className="profile-name">{displayName}</strong>
+            )}
           </div>
-          <button type="submit" title="Save profile name">Save</button>
+          {profileEditing ? (
+            <button className="profile-save-button" type="submit" title="Save profile name" aria-label="Save profile name">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+            </button>
+          ) : (
+            <button className="profile-edit-button" type="button" title="Edit profile name" aria-label="Edit profile name" onClick={() => { setProfileDraft(displayName); setProfileEditing(true); }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            </button>
+          )}
         </form>
         <div className="select-row">
           <label>Month<select value={monthDate.getMonth()} onChange={e => setMonthDate(new Date(monthDate.getFullYear(), Number(e.target.value), 1))}>
@@ -914,7 +973,7 @@ function App() {
         <Heatmap
           days={days}
           grid={grid}
-          habits={activeHabits}
+          habits={monthHabits}
           todayKey={todayKey}
           selectedDate={selectedDate}
           onSelect={setSelectedDate}
@@ -1069,8 +1128,11 @@ function ProgressBar({ pct, done, total, daysCount }) {
 
 function Heatmap({ days, grid, habits, todayKey, selectedDate, onSelect, onToggle, monthDate, extras, extraDraft, setExtraDraft, onAddExtra, onToggleExtra, onDeleteExtra }) {
   const selectedChecks = grid[selectedDate] || {};
-  const selectedStats = dayStats(selectedChecks, habits);
+  const selectedHabits = habitsForDate(habits, selectedDate);
+  const selectedStats = dayStats(selectedChecks, selectedHabits);
   const doneExtras = extras.filter(item => item.done).length;
+  const selectedEditable = selectedDate === todayKey;
+  const lockLabel = selectedEditable ? `Open until ${String(DAY_START_HOUR).padStart(2, "0")}:00` : selectedDate < todayKey ? "History locked" : "Not today";
   return (
     <div className="heatmap-card" style={{"--days": days.length}}>
       <div className="heatmap-title">{monthDate.toLocaleDateString("en-US",{month:"long",year:"numeric"})} - Habit Tracker</div>
@@ -1086,11 +1148,14 @@ function Heatmap({ days, grid, habits, todayKey, selectedDate, onSelect, onToggl
             {days.map(d => {
               const k = toDateKey(d);
               const checked = Boolean((grid[k] || {})[h.id]);
+              const available = habitsForDate([h], k).length > 0;
+              const editable = k === todayKey && available && h.active;
               return (
                 <button key={k}
-                  className={`heatmap-cell ${checked ? "habit-done" : "habit-miss"} ${k === todayKey ? "today" : ""} ${k === selectedDate ? "selected" : ""}`}
-                  onClick={() => onToggle(k, h.id)}
-                  title={`${h.title} - ${k}: ${checked ? "Done" : "Not done"}`}
+                  className={`heatmap-cell ${checked ? "habit-done" : "habit-miss"} ${editable ? "today" : "locked"} ${available ? "" : "dormant"} ${k === selectedDate ? "selected" : ""}`}
+                  onClick={() => editable ? onToggle(k, h.id) : onSelect(k)}
+                  title={`${h.title} - ${k}: ${available ? (checked ? "Done" : "Not done") : "Not active"}${editable ? "" : " (view only)"}`}
+                  aria-label={`${h.title} ${k} ${editable ? "editable today" : "view only"}`}
                 />
               );
             })}
@@ -1100,14 +1165,15 @@ function Heatmap({ days, grid, habits, todayKey, selectedDate, onSelect, onToggl
         {days.map(d => {
           const k = toDateKey(d);
           const c = grid[k] || {};
-          const done = habits.filter(h => c[h.id]).length;
-          const pct = habits.length ? done / habits.length : 0;
+          const dayHabits = habitsForDate(habits, k);
+          const done = dayHabits.filter(h => c[h.id]).length;
+          const pct = dayHabits.length ? done / dayHabits.length : 0;
           const lv = pct === 0 ? 0 : pct <= 0.25 ? 1 : pct <= 0.5 ? 2 : pct <= 0.75 ? 3 : pct < 1 ? 4 : 5;
           return (
             <button key={k}
               className={`heatmap-cell lv${lv} ${k === todayKey ? "today" : ""} ${k === selectedDate ? "selected" : ""}`}
               onClick={() => onSelect(k)}
-              title={`${k}: ${done}/${habits.length}`}
+              title={`${k}: ${done}/${dayHabits.length}`}
             />
           );
         })}
@@ -1119,38 +1185,43 @@ function Heatmap({ days, grid, habits, todayKey, selectedDate, onSelect, onToggl
       </div>
       <div className="selected-day-panel">
         <div className="selected-day-head">
-          <span>{selectedDate}</span>
-          <strong>{selectedStats.done}/{selectedStats.total} habits · {doneExtras}/{extras.length} extras</strong>
+          <div>
+            <span>{selectedDate}</span>
+            <em>{lockLabel}</em>
+          </div>
+          <strong>{selectedStats.done}/{selectedStats.total} habits - {doneExtras}/{extras.length} extras</strong>
         </div>
         <div className="selected-day-checks">
-          {habits.map(h => {
+          {selectedHabits.map(h => {
             const checked = Boolean(selectedChecks[h.id]);
+            const habitEditable = selectedEditable && h.active;
             return (
-              <label className={`selected-day-check ${checked ? "done" : ""}`} key={h.id}>
-                <input type="checkbox" checked={checked} onChange={() => onToggle(selectedDate, h.id)} />
+              <label className={`selected-day-check ${checked ? "done" : ""} ${habitEditable ? "" : "locked"}`} key={h.id}>
+                <input type="checkbox" checked={checked} disabled={!habitEditable} onChange={() => onToggle(selectedDate, h.id)} />
                 <span>{h.title}</span>
               </label>
             );
           })}
+          {selectedHabits.length === 0 && <div className="selected-day-empty">No habits were active on this day.</div>}
         </div>
-        <div className="today-extra-panel">
+        <div className={`today-extra-panel ${selectedEditable ? "" : "locked"}`}>
           <div className="today-extra-head">
             <span>Today Only</span>
-            <strong>Meetings, assignments, calls</strong>
+            <strong>{selectedEditable ? "Meetings, assignments, calls" : "View only"}</strong>
           </div>
           <form className="today-extra-form" onSubmit={onAddExtra}>
-            <input value={extraDraft} onChange={e => setExtraDraft(e.target.value)} placeholder="Add meeting, assignment, contest..." maxLength={90} />
-            <button type="submit">Add</button>
+            <input value={extraDraft} disabled={!selectedEditable} onChange={e => setExtraDraft(e.target.value)} placeholder={selectedEditable ? "Add meeting, assignment, contest..." : "Only today can be edited"} maxLength={90} />
+            <button type="submit" disabled={!selectedEditable}>Add</button>
           </form>
           <div className="today-extra-list">
             {extras.length === 0 && <div className="today-extra-empty">No one-off items for this day.</div>}
             {extras.map(item => (
               <div className={`today-extra-item ${item.done ? "done" : ""}`} key={item.id}>
                 <label>
-                  <input type="checkbox" checked={item.done} onChange={() => onToggleExtra(selectedDate, item.id)} />
+                  <input type="checkbox" checked={item.done} disabled={!selectedEditable} onChange={() => onToggleExtra(selectedDate, item.id)} />
                   <span>{item.title}</span>
                 </label>
-                <button type="button" onClick={() => onDeleteExtra(selectedDate, item.id)} aria-label={`Delete ${item.title}`}>&times;</button>
+                <button type="button" disabled={!selectedEditable} onClick={() => onDeleteExtra(selectedDate, item.id)} aria-label={`Delete ${item.title}`}>&times;</button>
               </div>
             ))}
           </div>

@@ -307,11 +307,13 @@ input:focus,select:focus{border-color:var(--purple)}
 }
 .brand-block span{display:block;margin-top:4px;font-size:9px;font-weight:800;letter-spacing:5px;text-transform:uppercase;color:var(--dim)}
 .profile-card{
-  display:grid;grid-template-columns:36px minmax(0,1fr) 42px;align-items:center;gap:8px;
+  display:grid;grid-template-columns:36px minmax(0,1fr) 34px;align-items:center;gap:8px;
   padding:8px;border:1px solid rgba(167,139,250,0.12);border-radius:12px;
   background:linear-gradient(135deg,rgba(167,139,250,0.10),rgba(52,211,153,0.05));
-  box-shadow:inset 0 1px 0 rgba(255,255,255,0.05);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.05),0 10px 28px rgba(0,0,0,0.10);
+  transition:border-color .2s var(--ease),box-shadow .2s var(--ease),background .2s var(--ease);
 }
+.profile-card.editing{border-color:rgba(167,139,250,0.34);box-shadow:0 0 0 3px var(--purple-glow),inset 0 1px 0 rgba(255,255,255,0.08)}
 .profile-avatar{
   width:36px;height:36px;border-radius:10px;display:grid;place-items:center;
   background:linear-gradient(135deg,var(--purple),var(--indigo) 55%,var(--mint));
@@ -325,11 +327,22 @@ input:focus,select:focus{border-color:var(--purple)}
   color:var(--ink);font-size:13px;font-weight:800;min-width:0;
 }
 .profile-copy input:focus{outline:none;border:0}
-.profile-card button{
-  height:28px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.07);
-  color:var(--ink);font-size:9px;font-weight:900;transition:all .2s var(--ease);
+.profile-name{
+  min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  color:var(--ink);font-size:13px;font-weight:900;line-height:24px;
 }
-.profile-card button:hover{border-color:var(--mint);color:var(--mint);box-shadow:0 0 14px var(--mint-glow)}
+.profile-card .profile-edit-button,.profile-card .profile-save-button{
+  width:32px;height:32px;border-radius:10px;border:1px solid var(--border);
+  display:grid;place-items:center;color:var(--ink);transition:all .2s var(--ease);
+}
+.profile-card .profile-edit-button{background:rgba(255,255,255,0.07)}
+.profile-card .profile-save-button{
+  border-color:rgba(52,211,153,0.35);
+  background:linear-gradient(135deg,var(--mint),var(--cyan));
+  color:#06111c;box-shadow:0 8px 20px var(--mint-glow);
+}
+.profile-card .profile-edit-button:hover{border-color:var(--purple);color:var(--purple);box-shadow:0 0 14px var(--purple-glow)}
+.profile-card .profile-save-button:hover{transform:translateY(-1px);box-shadow:0 12px 24px var(--mint-glow)}
 .privacy-panel{
   display:grid;gap:7px;padding:9px;border:1px solid var(--border);border-radius:12px;
   background:linear-gradient(135deg,rgba(255,255,255,0.055),rgba(167,139,250,0.055));
@@ -500,6 +513,9 @@ input:focus,select:focus{border-color:var(--purple)}
   transition:transform .12s ease-out,border-color .12s ease-out;
 }
 .heatmap-cell:hover{transform:scale(1.35);z-index:5;border-color:var(--purple)}
+.heatmap-cell.locked{cursor:default;opacity:.72}
+.heatmap-cell.locked:hover{transform:scale(1.08);border-color:rgba(167,139,250,0.18)}
+.heatmap-cell.dormant{opacity:.24;background:rgba(255,255,255,0.018);box-shadow:none}
 .heatmap-cell.habit-done{background:rgba(52,211,153,0.35);border-color:rgba(52,211,153,0.18);box-shadow:0 0 4px rgba(52,211,153,0.1)}
 .heatmap-cell.habit-miss{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.04)}
 .habit-label{font-size:7px !important;color:var(--ink) !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -516,13 +532,26 @@ input:focus,select:focus{border-color:var(--purple)}
 .heatmap-legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
 .selected-day-panel{margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
 .selected-day-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;font-size:10px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+.selected-day-head div{display:grid;gap:3px;min-width:0}
+.selected-day-head em{
+  width:max-content;max-width:100%;padding:3px 7px;border-radius:999px;
+  border:1px solid rgba(167,139,250,0.18);background:rgba(167,139,250,0.09);
+  color:var(--purple);font-size:8px;font-style:normal;font-weight:900;letter-spacing:.7px;white-space:nowrap;
+}
 .selected-day-head strong{color:var(--mint);white-space:nowrap}
 .selected-day-checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
 .selected-day-check{display:grid;grid-template-columns:18px minmax(0,1fr);align-items:center;gap:8px;min-height:34px;padding:0 10px;border:1px solid var(--border);border-radius:8px;background:rgba(255,255,255,0.03);font-size:11px;font-weight:700;color:var(--muted);cursor:pointer}
 .selected-day-check input{width:14px;height:14px;margin:0;accent-color:var(--mint)}
 .selected-day-check span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .selected-day-check.done{border-color:rgba(86,211,157,0.5);background:rgba(86,211,157,0.12);color:var(--ink)}
+.selected-day-check.locked{cursor:default;opacity:.72}
+.selected-day-check.locked input{cursor:not-allowed}
+.selected-day-empty{
+  min-height:34px;display:grid;place-items:center;padding:0 10px;border:1px dashed var(--border);
+  border-radius:8px;color:var(--dim);font-size:10px;font-weight:800;
+}
 .today-extra-panel{margin-top:10px;border-top:1px solid var(--border);padding-top:10px;display:grid;gap:8px}
+.today-extra-panel.locked{opacity:.82}
 .today-extra-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .today-extra-head span{font-size:9px;font-weight:900;letter-spacing:2px;text-transform:uppercase;color:var(--purple)}
 .today-extra-head strong{font-size:9px;font-weight:800;color:var(--muted);white-space:nowrap}
@@ -534,6 +563,9 @@ input:focus,select:focus{border-color:var(--purple)}
 .today-extra-form button{
   min-height:34px;border-radius:9px;background:linear-gradient(135deg,var(--mint),var(--cyan));
   color:#04111f;font-size:10px;font-weight:900;
+}
+.today-extra-form input:disabled,.today-extra-form button:disabled{
+  cursor:not-allowed;opacity:.58;box-shadow:none;
 }
 .today-extra-list{display:grid;gap:6px;max-height:86px;overflow-y:auto}
 .today-extra-empty{padding:8px 10px;border:1px dashed var(--border);border-radius:9px;color:var(--dim);font-size:10px;font-weight:750;text-align:center}
@@ -547,6 +579,8 @@ input:focus,select:focus{border-color:var(--purple)}
 .today-extra-item.done span{text-decoration:line-through;color:var(--muted)}
 .today-extra-item button{width:20px;height:20px;border-radius:6px;color:var(--dim);font-size:13px}
 .today-extra-item button:hover{background:rgba(248,113,113,.10);color:var(--red)}
+.today-extra-item button:disabled,.today-extra-item input:disabled{cursor:not-allowed;opacity:.45}
+.today-extra-item button:disabled:hover{background:transparent;color:var(--dim)}
 
 /* Weekly Rings */
 .weekly-card{
@@ -825,6 +859,7 @@ body[data-theme="light"] .heatmap-cell.habit-done{
   border-color:rgba(15,159,110,.42);
 }
 body[data-theme="light"] .selected-day-check,
+body[data-theme="light"] .selected-day-empty,
 body[data-theme="light"] .reminder-title-field,
 body[data-theme="light"] .reminder-field,
 body[data-theme="light"] .name-capture label{
@@ -863,10 +898,18 @@ body[data-theme="light"] .privacy-panel{
   background:linear-gradient(135deg,#f8fafc,#eef2ff);
   border-color:#d4dbea;
 }
+body[data-theme="light"] .profile-card.editing{box-shadow:0 0 0 3px rgba(124,92,255,.12),0 18px 34px rgba(30,41,59,.08)}
+body[data-theme="light"] .profile-card .profile-edit-button{background:#fff;color:#334155}
+body[data-theme="light"] .profile-name{color:#111827}
 body[data-theme="light"] .privacy-pin-form input,
 body[data-theme="light"] .privacy-unlock-form input{
   background:#f8fafc;
   border-color:#cfd8e8;
+}
+body[data-theme="light"] .selected-day-head em{
+  background:#eef2ff;
+  border-color:#d8ddff;
+  color:#4f46e5;
 }
 body[data-theme="light"] .reminder-form input[type="date"],
 body[data-theme="light"] .reminder-form input[type="time"]{color-scheme:light}
@@ -875,6 +918,17 @@ body[data-theme="light"] .today-extra-item,
 body[data-theme="light"] .reminder-priority-toggle{
   background:#f8fafc;
   border-color:#d4dbea;
+}
+body[data-theme="light"] .heatmap-cell.locked,
+body[data-theme="light"] .heatmap-cell.dormant,
+body[data-theme="light"] .selected-day-check.locked,
+body[data-theme="light"] .today-extra-panel.locked{
+  opacity:.78;
+}
+body[data-theme="light"] .heatmap-cell.dormant{background:#f5f7fb;border-color:#e3e8f2}
+body[data-theme="light"] .today-extra-form input:disabled{
+  background:#eef2f7;
+  color:#64748b;
 }
 
 /* ── RESPONSIVE ────────────────────────── */
