@@ -1467,6 +1467,7 @@ function App() {
           onSleep={markGoingToSleep}
           onWake={markAwake}
         />
+        <ReminderCard reminders={reminders} draft={reminderDraft} setDraft={setReminderDraft} onAdd={addReminder} onDelete={deleteReminder} status={reminderState} />
         <TopHabitsCard rows={rows} />
         <ResistCard
           temptations={temptations}
@@ -1488,7 +1489,6 @@ function App() {
             saveTemptationList(next);
           }}
         />
-        <ReminderCard reminders={reminders} draft={reminderDraft} setDraft={setReminderDraft} onAdd={addReminder} onDelete={deleteReminder} status={reminderState} />
         <DailyProgressCard rows={rows} daysCount={days.length} />
         <div className="quote-strip">{pick(BOTTOM_QUOTES)}</div>
       </section>
@@ -1852,7 +1852,10 @@ function DailyProgressCard({ rows, daysCount }) {
 
 
 function ReminderCard({ reminders, draft, setDraft, onAdd, onDelete, status }) {
-  const sorted = [...reminders].sort((a, b) => reminderStamp(a).localeCompare(reminderStamp(b)));
+  const sorted = [...reminders].sort((a, b) => {
+    if (Boolean(a.done) !== Boolean(b.done)) return a.done ? 1 : -1;
+    return reminderStamp(a).localeCompare(reminderStamp(b));
+  });
   const today = dayforgeTodayKey();
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -1871,6 +1874,17 @@ function ReminderCard({ reminders, draft, setDraft, onAdd, onDelete, status }) {
       <div className="reminder-summary">
         <span>{reminders.length} set</span>
         <strong>{next ? `${prettyReminderDate(next.date)} at ${prettyReminderTime(next.time)}` : "No upcoming reminder"}</strong>
+      </div>
+      <div className="reminder-list">
+        {sorted.length === 0 && <div className="reminder-empty">No reminders yet. Add one to get email notifications.</div>}
+        {sorted.map(r => (
+          <div className={`reminder-item ${r.priority === "high" ? "priority" : ""} ${r.done ? "done" : ""}`} key={r.id}>
+            <span className="r-title">{r.title}</span>
+            <span className="r-date">{r.done ? "Sent" : prettyReminderDate(r.date)}</span>
+            <span className="r-time">{prettyReminderTime(r.time)}</span>
+            <button className="r-del" type="button" onClick={() => onDelete(r.id)} title="Delete">&times;</button>
+          </div>
+        ))}
       </div>
       <form className="reminder-form" onSubmit={onAdd}>
         <label className="reminder-title-field">
@@ -1901,17 +1915,6 @@ function ReminderCard({ reminders, draft, setDraft, onAdd, onDelete, status }) {
         <button type="button" onClick={() => setDraft({...draft, date: today})}>Today</button>
         <button type="button" onClick={() => setDraft({...draft, date: toDateKey(tomorrow)})}>Tomorrow</button>
         <button type="button" onClick={() => setDraft({...draft, time: "21:00"})}>9 PM</button>
-      </div>
-      <div className="reminder-list">
-        {sorted.length === 0 && <div className="reminder-empty">No reminders yet. Add one to get email notifications.</div>}
-        {sorted.map(r => (
-          <div className={`reminder-item ${r.priority === "high" ? "priority" : ""}`} key={r.id}>
-            <span className="r-title">{r.title}</span>
-            <span className="r-date">{prettyReminderDate(r.date)}</span>
-            <span className="r-time">{prettyReminderTime(r.time)}</span>
-            <button className="r-del" type="button" onClick={() => onDelete(r.id)} title="Delete">&times;</button>
-          </div>
-        ))}
       </div>
     </div>
   );

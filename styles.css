@@ -617,7 +617,7 @@ input:focus,select:focus{border-color:var(--purple)}
 .ring text{fill:var(--ink);font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700}
 
 /* ── RIGHT PANEL ───────────────────────── */
-.right-panel{display:flex;flex-direction:column;gap:10px;min-width:0;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin}
+.right-panel{display:flex;flex-direction:column;gap:10px;min-width:0;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;padding-bottom:4px}
 
 /* Stat Cards Row */
 .stat-cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;flex-shrink:0}
@@ -716,7 +716,7 @@ input:focus,select:focus{border-color:var(--purple)}
 .reminder-card{
   flex:0 0 auto;display:flex;flex-direction:column;overflow:hidden;
   border:1px solid var(--border);border-radius:14px;background:var(--glass);
-  max-height:380px;animation:popIn .4s var(--ease) .25s both;
+  max-height:360px;animation:popIn .4s var(--ease) .25s both;
   box-shadow:inset 0 1px 0 rgba(255,255,255,0.04),0 16px 34px rgba(0,0,0,0.12);
 }
 .reminder-card .card-header{border-bottom:1px solid var(--border)}
@@ -788,7 +788,10 @@ input:focus,select:focus{border-color:var(--purple)}
   letter-spacing:.5px;text-transform:uppercase;transition:all .2s var(--ease);
 }
 .reminder-quick-row button:hover{border-color:var(--purple);color:var(--ink);background:rgba(167,139,250,0.10)}
-.reminder-list{flex:1;min-height:0;overflow-y:auto;padding:5px 0}
+.reminder-list{
+  flex:1;min-height:44px;max-height:126px;overflow-y:auto;padding:5px 0;
+  border-bottom:1px solid var(--border);
+}
 .reminder-item{
   display:grid;grid-template-columns:minmax(0,1fr) auto auto 20px;gap:7px;align-items:center;
   padding:7px 12px;border-bottom:1px solid rgba(255,255,255,0.03);
@@ -796,6 +799,9 @@ input:focus,select:focus{border-color:var(--purple)}
 }
 .reminder-item:hover{background:rgba(167,139,250,0.04)}
 .reminder-item.priority{background:linear-gradient(90deg,rgba(251,191,36,.09),transparent);border-left:2px solid var(--amber)}
+.reminder-item.done{opacity:.72}
+.reminder-item.done .r-title{text-decoration:line-through;color:var(--muted)}
+.reminder-item.done .r-date{color:var(--mint)}
 .reminder-item .r-title{font-size:11px;font-weight:750;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .reminder-item .r-time{
   font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:800;
