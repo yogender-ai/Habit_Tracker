@@ -1068,6 +1068,26 @@ function App() {
     pushDay(dateKey, grid[dateKey] || {}, dailyExtras, clean);
   }
 
+  function markGoingToSleep() {
+    const now = new Date();
+    const key = dayforgeTodayKey();
+    const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+    const next = { ...sleepLog, [key]: [...(sleepLog[key] || []), { time: now.toISOString(), display: timeStr }] };
+    saveSleepLog(next, key);
+  }
+
+  function markAwake() {
+    const now = new Date();
+    const key = dayforgeTodayKey();
+    const existing = sleepLog[key] || [];
+    const last = existing[existing.length - 1];
+    if (!last || last.woke) return;
+    const wakeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+    const updated = [...existing.slice(0, -1), { ...last, woke: now.toISOString(), wokeDisplay: wakeStr }];
+    const next = { ...sleepLog, [key]: updated };
+    saveSleepLog(next, key);
+  }
+
   async function saveWorkspaceWithReminders(nr) {
     if (!user) return;
     await saveWorkspaceState(
@@ -1414,6 +1434,12 @@ function App() {
       <section className="center-panel" style={{"--days": days.length}}>
         <MissionBanner missionLine={missionLine} pct={ms.pct} firstName={firstName} todayStats={todayStats} cs={cs} ws={ws} activeHabits={activeHabits} />
         <ProgressBar pct={ms.pct} done={ms.done} total={ms.total} daysCount={days.length} />
+        <SleepCard
+          log={sleepLog}
+          todayKey={todayKey}
+          onSleep={markGoingToSleep}
+          onWake={markAwake}
+        />
         <Heatmap
           days={days}
           grid={grid}
@@ -1441,28 +1467,6 @@ function App() {
           <div className="stat-card"><div className="stat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg></div><span className="stat-value">{ms.pct}%</span><div className="stat-label">Completion</div></div>
           <div className="stat-card"><div className="stat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="#22d3ee"/></svg></div><span className="stat-value">{fs}</span><div className="stat-label">Focus Score</div></div>
         </div>
-        <SleepCard
-          log={sleepLog}
-          todayKey={todayKey}
-          onSleep={() => {
-            const now = new Date();
-            const key = dayforgeTodayKey();
-            const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
-            const next = { ...sleepLog, [key]: [...(sleepLog[key] || []), { time: now.toISOString(), display: timeStr }] };
-            saveSleepLog(next, key);
-          }}
-          onWake={() => {
-            const now = new Date();
-            const key = dayforgeTodayKey();
-            const existing = sleepLog[key] || [];
-            const last = existing[existing.length - 1];
-            if (!last || last.woke) return;
-            const wakeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
-            const updated = [...existing.slice(0, -1), { ...last, woke: now.toISOString(), wokeDisplay: wakeStr }];
-            const next = { ...sleepLog, [key]: updated };
-            saveSleepLog(next, key);
-          }}
-        />
         <TopHabitsCard rows={rows} />
         <ResistCard
           temptations={temptations}
@@ -1776,10 +1780,10 @@ function SleepCard({ log, todayKey, onSleep, onWake }) {
         <div className="sleep-entries">
           {todayEntries.map((entry, i) => (
             <div key={i} className={`sleep-entry ${entry.woke ? "complete" : "active"}`}>
-              <span className="sleep-time">🌙 {entry.display}</span>
-              {entry.woke && <span className="wake-time">☀️ {entry.wokeDisplay}</span>}
+              <span className="sleep-time">Sleep {entry.display}</span>
+              {entry.woke && <span className="wake-time">Wake {entry.wokeDisplay}</span>}
               {entry.woke && <span className="sleep-duration">{durationStr(entry.time, entry.woke)}</span>}
-              {!entry.woke && <span className="sleep-active">💤 sleeping...</span>}
+              {!entry.woke && <span className="sleep-active">sleeping...</span>}
             </div>
           ))}
         </div>
@@ -1792,7 +1796,7 @@ function SleepCard({ log, todayKey, onSleep, onWake }) {
             return (
               <div key={day} className="sleep-history-item">
                 <span>{day}</span>
-                <span>{lastComplete ? `${lastComplete.display} → ${lastComplete.wokeDisplay} (${durationStr(lastComplete.time, lastComplete.woke)})` : entries.length ? `${entries[0].display}` : "—"}</span>
+                <span>{lastComplete ? `${lastComplete.display} to ${lastComplete.wokeDisplay} (${durationStr(lastComplete.time, lastComplete.woke)})` : entries.length ? `${entries[0].display}` : "-"}</span>
               </div>
             );
           })}
