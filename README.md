@@ -35,7 +35,7 @@ window.DAYFORGE_CONFIG = {
 You can also set the same connection at build time with Vite env vars:
 
 ```bash
-VITE_API_BASE_URL=https://dayforge-api.onrender.com
+VITE_API_BASE_URL=https://habit-tracker-9a2o.onrender.com
 VITE_APP_TIMEZONE=Asia/Kolkata
 ```
 
@@ -76,7 +76,7 @@ For Resend, `RESEND_FROM_EMAIL` must use a sender/domain verified in Resend. Kee
 Create a cron job from Render Cron, cron-job.org, GitHub Actions, or any scheduler that calls:
 
 ```bash
-POST https://dayforge-api.onrender.com/api/notifications/due
+POST https://habit-tracker-9a2o.onrender.com/api/notifications/due
 X-Cron-Secret: your-NOTIFICATION_CRON_SECRET
 ```
 
