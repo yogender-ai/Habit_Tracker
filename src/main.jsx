@@ -447,6 +447,9 @@ function App() {
   const [extraDraft, setExtraDraft] = useState("");
   const [temptations, setTemptations] = useState(() => readLegacyTemptations().map(normalizeTemptation).filter(Boolean));
   const [temptDraft, setTemptDraft] = useState("");
+  const [sleepLog, setSleepLog] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("dayforge_sleep") || "{}"); } catch { return {}; }
+  });
 
   const days = useMemo(() => monthDays(monthDate), [monthDate]);
   const monthId = monthKey(monthDate);
@@ -1365,6 +1368,30 @@ function App() {
           <div className="stat-card"><div className="stat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg></div><span className="stat-value">{ms.pct}%</span><div className="stat-label">Completion</div></div>
           <div className="stat-card"><div className="stat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="#22d3ee"/></svg></div><span className="stat-value">{fs}</span><div className="stat-label">Focus Score</div></div>
         </div>
+        <SleepCard
+          log={sleepLog}
+          todayKey={todayKey}
+          onSleep={() => {
+            const now = new Date();
+            const key = dayforgeTodayKey();
+            const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+            const next = { ...sleepLog, [key]: [...(sleepLog[key] || []), { time: now.toISOString(), display: timeStr }] };
+            setSleepLog(next);
+            localStorage.setItem("dayforge_sleep", JSON.stringify(next));
+          }}
+          onWake={() => {
+            const now = new Date();
+            const key = dayforgeTodayKey();
+            const existing = sleepLog[key] || [];
+            const last = existing[existing.length - 1];
+            if (!last || last.woke) return;
+            const wakeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+            const updated = [...existing.slice(0, -1), { ...last, woke: now.toISOString(), wokeDisplay: wakeStr }];
+            const next = { ...sleepLog, [key]: updated };
+            setSleepLog(next);
+            localStorage.setItem("dayforge_sleep", JSON.stringify(next));
+          }}
+        />
         <TopHabitsCard rows={rows} />
         <ResistCard
           temptations={temptations}
@@ -1634,6 +1661,72 @@ function WeeklySection({ weeks }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function SleepCard({ log, todayKey, onSleep, onWake }) {
+  const todayEntries = log[todayKey] || [];
+  const lastEntry = todayEntries[todayEntries.length - 1];
+  const isSleeping = lastEntry && !lastEntry.woke;
+  // Show last 5 days of sleep data
+  const recentDays = Object.keys(log).sort().reverse().slice(0, 5);
+
+  function durationStr(sleepISO, wakeISO) {
+    const ms = new Date(wakeISO) - new Date(sleepISO);
+    const hrs = Math.floor(ms / 3600000);
+    const mins = Math.floor((ms % 3600000) / 60000);
+    return `${hrs}h ${mins}m`;
+  }
+
+  return (
+    <div className="sleep-card">
+      <div className="sleep-header">
+        <span className="sleep-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+          Sleep Tracker
+        </span>
+        <span className="sleep-count">{todayEntries.length} log{todayEntries.length !== 1 ? "s" : ""} today</span>
+      </div>
+      <div className="sleep-actions">
+        {!isSleeping ? (
+          <button className="sleep-btn" onClick={onSleep}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+            Going to sleep?
+          </button>
+        ) : (
+          <button className="wake-btn" onClick={onWake}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+            I'm awake!
+          </button>
+        )}
+      </div>
+      {todayEntries.length > 0 && (
+        <div className="sleep-entries">
+          {todayEntries.map((entry, i) => (
+            <div key={i} className={`sleep-entry ${entry.woke ? "complete" : "active"}`}>
+              <span className="sleep-time">🌙 {entry.display}</span>
+              {entry.woke && <span className="wake-time">☀️ {entry.wokeDisplay}</span>}
+              {entry.woke && <span className="sleep-duration">{durationStr(entry.time, entry.woke)}</span>}
+              {!entry.woke && <span className="sleep-active">💤 sleeping...</span>}
+            </div>
+          ))}
+        </div>
+      )}
+      {recentDays.length > 1 && (
+        <div className="sleep-history">
+          {recentDays.slice(1, 4).map(day => {
+            const entries = log[day] || [];
+            const lastComplete = [...entries].reverse().find(e => e.woke);
+            return (
+              <div key={day} className="sleep-history-item">
+                <span>{day}</span>
+                <span>{lastComplete ? `${lastComplete.display} → ${lastComplete.wokeDisplay} (${durationStr(lastComplete.time, lastComplete.woke)})` : entries.length ? `${entries[0].display}` : "—"}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

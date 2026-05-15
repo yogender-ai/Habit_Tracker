@@ -882,6 +882,65 @@ input:focus,select:focus{border-color:var(--purple)}
 .resist-del:hover{background:rgba(248,113,113,.10);color:var(--red)}
 .resist-empty{padding:14px;text-align:center;font-size:10px;color:var(--dim);font-weight:700}
 
+/* ── SLEEP TRACKER ────────────────────── */
+.sleep-card{
+  border:1px solid var(--border);border-radius:var(--radius);background:var(--glass);
+  overflow:hidden;transition:border-color .3s;
+}
+.sleep-card:hover{border-color:rgba(129,140,248,0.15)}
+.sleep-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 14px 8px;
+}
+.sleep-title{
+  font-size:9px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:var(--muted);
+  display:flex;align-items:center;gap:6px;
+}
+.sleep-title svg{color:var(--indigo)}
+.sleep-count{font-size:9px;font-weight:800;color:var(--dim)}
+.sleep-actions{padding:0 14px 10px}
+.sleep-btn,.wake-btn{
+  width:100%;min-height:38px;border-radius:10px;border:0;
+  font-size:12px;font-weight:900;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  transition:all .25s var(--ease);
+}
+.sleep-btn{
+  background:linear-gradient(135deg,var(--indigo),rgba(167,139,250,0.8));color:#fff;
+  box-shadow:0 4px 16px var(--indigo-glow);
+}
+.sleep-btn:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(129,140,248,0.25)}
+.wake-btn{
+  background:linear-gradient(135deg,var(--amber),rgba(251,191,36,0.85));color:#1a1a2e;
+  box-shadow:0 4px 16px var(--amber-glow);
+}
+.wake-btn:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(251,191,36,0.25)}
+.sleep-entries{padding:0 14px 10px;display:grid;gap:6px}
+.sleep-entry{
+  display:flex;align-items:center;gap:8px;padding:8px 10px;
+  border:1px solid var(--border);border-radius:8px;
+  background:rgba(255,255,255,0.02);font-size:11px;font-weight:700;
+}
+.sleep-entry.active{border-left:3px solid var(--indigo);background:rgba(129,140,248,0.04)}
+.sleep-entry.complete{border-left:3px solid var(--mint);background:rgba(52,211,153,0.04)}
+.sleep-time,.wake-time{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800}
+.sleep-duration{
+  margin-left:auto;padding:2px 8px;border-radius:999px;
+  background:rgba(52,211,153,0.12);color:var(--mint);
+  font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:900;
+}
+.sleep-active{
+  margin-left:auto;padding:2px 8px;border-radius:999px;
+  background:rgba(129,140,248,0.12);color:var(--indigo);
+  font-size:9px;font-weight:900;
+}
+.sleep-history{padding:0 14px 10px;border-top:1px solid var(--border);padding-top:8px}
+.sleep-history-item{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:4px 0;font-size:9px;color:var(--muted);font-weight:700;
+}
+.sleep-history-item span:first-child{font-family:'JetBrains Mono',monospace;font-weight:800;color:var(--dim)}
+
 /* ── PREMIUM WHITE THEME ──────────────────── */
 body[data-theme="light"]{
   --bg:#f4f6fb;--surface:rgba(255,255,255,0.96);--surface2:rgba(245,247,252,0.98);
@@ -1091,6 +1150,15 @@ body[data-theme="light"] .resist-item:hover{background:rgba(5,150,105,0.02)}
 body[data-theme="light"] .resist-toggle{border-color:#e2e8f0}
 body[data-theme="light"] .resist-item.won .resist-toggle{background:rgba(5,150,105,0.06);border-color:rgba(5,150,105,0.25)}
 body[data-theme="light"] .resist-item.lost .resist-toggle{background:rgba(220,38,38,0.06);border-color:rgba(220,38,38,0.2)}
+
+/* Sleep Card */
+body[data-theme="light"] .sleep-card{background:#fff;border-color:rgba(0,0,0,0.06);box-shadow:0 1px 3px rgba(15,23,42,0.03),0 8px 24px rgba(15,23,42,0.05)}
+body[data-theme="light"] .sleep-entry{background:#fafbfd;border-color:#e2e8f0}
+body[data-theme="light"] .sleep-entry.active{border-left-color:var(--indigo);background:rgba(79,70,229,0.03)}
+body[data-theme="light"] .sleep-entry.complete{border-left-color:var(--mint);background:rgba(5,150,105,0.03)}
+body[data-theme="light"] .sleep-duration{background:rgba(5,150,105,0.08)}
+body[data-theme="light"] .sleep-active{background:rgba(79,70,229,0.08)}
+body[data-theme="light"] .sleep-history{border-top-color:rgba(0,0,0,0.05)}
 
 /* Scrollbar */
 body[data-theme="light"] ::-webkit-scrollbar-thumb{background:rgba(79,70,229,0.12)}
