@@ -572,16 +572,64 @@ def configured_origins():
 
 
 def notification_html(title, intro, lines):
-    line_html = "".join(f"<li>{html.escape(line)}</li>" for line in lines if line)
+    clean_lines = [line for line in lines if line]
+    line_html = "".join(
+        f"""
+        <tr>
+          <td style="width:34px;padding:0 0 12px 0;vertical-align:top">
+            <div style="width:24px;height:24px;border-radius:999px;background:#efe8ff;color:#6d45d8;text-align:center;line-height:24px;font-size:12px;font-weight:800">{index}</div>
+          </td>
+          <td style="padding:2px 0 12px 0;color:#2f3440;font-size:14px;line-height:1.55;font-weight:600">{html.escape(line)}</td>
+        </tr>
+        """
+        for index, line in enumerate(clean_lines, start=1)
+    )
+    app_url = clean_text(os.getenv("APP_PUBLIC_URL") or os.getenv("PUBLIC_APP_URL"), 240)
+    cta_html = ""
+    if app_url:
+        cta_html = f"""
+        <tr>
+          <td style="padding:8px 0 4px 0">
+            <a href="{html.escape(app_url, quote=True)}" style="display:inline-block;background:#7c5cff;color:#ffffff;text-decoration:none;border-radius:10px;padding:13px 18px;font-size:14px;font-weight:800">Open DayForge</a>
+          </td>
+        </tr>
+        """
+
+    preview = html.escape(f"{title}. {intro}"[:140])
     return f"""
-    <div style="font-family:Inter,Arial,sans-serif;background:#f6f4ee;padding:24px;color:#20242a">
-      <div style="max-width:620px;margin:auto;background:#ffffff;border:1px solid #ded8c9;border-radius:8px;padding:24px">
-        <p style="margin:0 0 8px;color:#4b6f62;font-weight:700">DayForge</p>
-        <h1 style="font-size:24px;line-height:1.25;margin:0 0 12px">{html.escape(title)}</h1>
-        <p style="font-size:15px;line-height:1.6;margin:0 0 16px">{html.escape(intro)}</p>
-        <ul style="padding-left:20px;line-height:1.7;margin:0">{line_html}</ul>
-      </div>
-    </div>
+    <!doctype html>
+    <html>
+      <body style="margin:0;padding:0;background:#f3f0ea;font-family:Inter,Arial,sans-serif;color:#111827">
+        <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">{preview}</div>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f3f0ea;padding:32px 16px">
+          <tr>
+            <td align="center">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:660px;background:#ffffff;border:1px solid #ded7ca;border-radius:18px;overflow:hidden;box-shadow:0 18px 50px rgba(31,35,48,0.10)">
+                <tr>
+                  <td style="background:#11131c;padding:28px 30px">
+                    <div style="font-size:12px;letter-spacing:4px;text-transform:uppercase;color:#b9a7ff;font-weight:900">DayForge</div>
+                    <div style="margin-top:12px;font-size:30px;line-height:1.15;color:#ffffff;font-weight:900">{html.escape(title)}</div>
+                    <div style="margin-top:12px;max-width:540px;color:#d9d6e8;font-size:15px;line-height:1.65">{html.escape(intro)}</div>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:28px 30px 26px 30px">
+                    <div style="font-size:12px;letter-spacing:3px;text-transform:uppercase;color:#7c5cff;font-weight:900;margin-bottom:14px">Your next moves</div>
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">{line_html}</table>
+                    <table role="presentation" cellspacing="0" cellpadding="0">{cta_html}</table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="background:#faf8f4;border-top:1px solid #eee7dc;padding:18px 30px;color:#747988;font-size:12px;line-height:1.5">
+                    Keep it small. Mark it honestly. Come back tomorrow.
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+    </html>
     """
 
 
@@ -790,14 +838,14 @@ async def send_welcome_notification(request: Request, user=Depends(require_user)
     try:
         result = resend.send_email(
             to_email,
-            "Welcome to Day Forge",
+            "Your DayForge dashboard is ready",
             notification_html(
-                f"Welcome to Day Forge, {display_name}",
-                "Your monthly habit command center is ready. This is where small daily marks become visible momentum.",
+                f"Welcome, {display_name}",
+                "Your habit dashboard is ready. Start with one honest mark today, then let the month show you the momentum you are building.",
                 [
-                    "Add the habits you want to track this month.",
-                    "Check off each day honestly; the dashboard will keep the score.",
-                    "Come back daily, protect the streak, and build the identity you want.",
+                    "Keep your habit list simple enough that you can actually show up every day.",
+                    "Open today's date and mark only what you truly completed.",
+                    "Use the streak and heatmap as feedback, not pressure. The goal is consistency.",
                 ],
             ),
         )

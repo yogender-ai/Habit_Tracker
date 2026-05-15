@@ -57,6 +57,7 @@ Save these in the Render web service environment:
 ```bash
 APP_TIMEZONE=Asia/Kolkata
 CORS_ORIGINS=https://your-vercel-app.vercel.app,http://localhost:5173,http://127.0.0.1:5173
+APP_PUBLIC_URL=https://your-vercel-app.vercel.app
 DATABASE_URL_PRIMARY=postgresql://...
 DATABASE_URL_SECONDARY=postgresql://...
 FIREBASE_PROJECT_ID=news-intel-d1bd3
