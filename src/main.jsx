@@ -1460,13 +1460,14 @@ function App() {
           <div className="stat-card"><div className="stat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg></div><span className="stat-value">{todayStats.done}</span><div className="stat-label">Done Today</div></div>
           <div className="stat-card"><div className="stat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg></div><span className="stat-value">{ms.pct}%</span><div className="stat-label">Completion</div></div>
           <div className="stat-card"><div className="stat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="#22d3ee"/></svg></div><span className="stat-value">{fs}</span><div className="stat-label">Focus Score</div></div>
+          <SleepCard
+            className="stat-sleep-card"
+            log={sleepLog}
+            todayKey={todayKey}
+            onSleep={markGoingToSleep}
+            onWake={markAwake}
+          />
         </div>
-        <SleepCard
-          log={sleepLog}
-          todayKey={todayKey}
-          onSleep={markGoingToSleep}
-          onWake={markAwake}
-        />
         <ReminderCard reminders={reminders} draft={reminderDraft} setDraft={setReminderDraft} onAdd={addReminder} onDelete={deleteReminder} status={reminderState} />
         <TopHabitsCard rows={rows} />
         <ResistCard
@@ -1740,7 +1741,7 @@ function WeeklySection({ weeks }) {
   );
 }
 
-function SleepCard({ log, todayKey, onSleep, onWake }) {
+function SleepCard({ log, todayKey, onSleep, onWake, className = "" }) {
   const todayEntries = log[todayKey] || [];
   const lastEntry = todayEntries[todayEntries.length - 1];
   const isSleeping = lastEntry && !lastEntry.woke;
@@ -1755,7 +1756,7 @@ function SleepCard({ log, todayKey, onSleep, onWake }) {
   }
 
   return (
-    <div className="sleep-card">
+    <div className={`sleep-card ${className}`}>
       <div className="sleep-header">
         <span className="sleep-title">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>

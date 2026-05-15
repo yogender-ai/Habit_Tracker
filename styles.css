@@ -894,6 +894,7 @@ input:focus,select:focus{border-color:var(--purple)}
   border:1px solid var(--border);border-radius:var(--radius);background:var(--glass);
   overflow:hidden;transition:border-color .3s;
 }
+.stat-sleep-card{grid-column:1 / -1}
 .sleep-card:hover{border-color:rgba(129,140,248,0.15)}
 .sleep-header{
   display:flex;align-items:center;justify-content:space-between;
