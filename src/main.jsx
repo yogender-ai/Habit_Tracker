@@ -29,12 +29,33 @@ const QUOTES = [
   "A warrior is built by repeated promises kept quietly.",
   "Forge Discipline. Build Legacy. Stay unstoppable.",
   "Consistency today. Mastery tomorrow. Keep forging momentum.",
+  "The pain you feel today is the strength you feel tomorrow.",
+  "Success is the sum of small efforts repeated day in and day out.",
+  "Your consistency is stronger than your motivation.",
+  "I forge strength daily. Discipline today, power forever.",
+  "Progress loves clarity. Check the box, then move again.",
+  "One more rep. One more day. One more promise kept.",
+  "Champions are made when nobody is watching.",
+  "Every expert was once a beginner who refused to quit.",
 ];
 
 const MISSION_LINES = [
   "You're forging momentum.", "Stay consistent. Stay unstoppable.",
   "Every small action compounds.", "Forge your legacy, one habit at a time.",
   "The grind is the glory.", "Discipline equals freedom.",
+  "Build the habit. Become the person.", "Today's effort is tomorrow's strength.",
+  "Your future self will thank you.", "Win the day. Win the month.",
+];
+
+const BOTTOM_QUOTES = [
+  "Keep forging. You've got this.",
+  "Your consistency is showing. Don't stop.",
+  "Every checked box is a promise kept.",
+  "Small wins stack into massive results.",
+  "The streak doesn't build itself. You do.",
+  "Momentum is built one habit at a time.",
+  "Stay locked in. Stay dangerous.",
+  "You're stronger than your excuses.",
 ];
 
 const LEGACY_DEFAULT_HABIT_IDS = new Set([
@@ -269,10 +290,10 @@ function App() {
             <h1>Sign in to enter your habit command center.</h1>
             <p>Track habits, build streaks, forge discipline. Your monthly grid syncs after Google sign-in.</p>
             <button type="button" className="primary-button" onClick={handleAuth}>Sign in with Google</button>
-            <button type="button" className="theme-button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>{theme === "dark" ? "Light" : "Dark"}</button>
+            <button type="button" className="theme-button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></button>
             <small>{syncState}</small>
           </div>
-          <img src={heroImg} alt="Discipline training" />
+          <img src={heroImg} alt="" onError={e => {e.target.style.background='linear-gradient(135deg,#1a1040,#0d0d2b)';e.target.style.minHeight='300px'}} />
         </section>
       </div>
     );
@@ -292,11 +313,11 @@ function App() {
             </form>
             <div className="first-habit-actions">
               <button className="auth-button" type="button" onClick={handleAuth}>Sign out</button>
-              <button className="theme-button small" type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>Theme</button>
+              <button className="theme-button small" type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></button>
             </div>
             <small>{syncState} - {welcomeState}</small>
           </div>
-          <img src={heroImg} alt="Discipline training" />
+          <img src={heroImg} alt="" onError={e => {e.target.style.background='linear-gradient(135deg,#1a1040,#0d0d2b)';e.target.style.minHeight='300px'}} />
         </section>
       </div>
     );
@@ -328,14 +349,14 @@ function App() {
           </select></label>
         </div>
         <figure className="focus-card">
-          <img src={heroImg} alt="Warrior training" />
-          <figcaption>"{quote}"</figcaption>
+          <img src={heroImg} alt="" onError={e => {e.target.style.display='none'}} />
+          <figcaption>❝ {quote} ❞</figcaption>
         </figure>
         <div className="habit-list-card">
-          <h2>Daily Habits</h2>
+          <h2>✦ Daily Habits</h2>
           <ol>
             {activeHabits.map(h => (
-              <li key={h.id}><span>{h.title}</span><button type="button" onClick={() => deleteHabit(h.id)} aria-label={`Delete ${h.title}`}>x</button></li>
+              <li key={h.id}><span>{h.title}</span><button type="button" onClick={() => deleteHabit(h.id)} aria-label={`Delete ${h.title}`}>×</button></li>
             ))}
           </ol>
         </div>
@@ -345,7 +366,7 @@ function App() {
         </form>
         <div className="account-row">
           <button className="auth-button" type="button" onClick={handleAuth}>Sign out</button>
-          <button className="theme-button small" type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>Theme</button>
+          <button className="theme-button small" type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></button>
         </div>
         <p className="sync-line">{syncState} - {welcomeState}</p>
       </section>
@@ -361,14 +382,14 @@ function App() {
       {/* RIGHT PANEL */}
       <section className="right-panel">
         <div className="stat-cards">
-          <div className="stat-card"><div className="stat-icon">S</div><span className="stat-value">{cs}</span><div className="stat-label">Current Streak</div></div>
-          <div className="stat-card"><div className="stat-icon">D</div><span className="stat-value">{todayStats.done}</span><div className="stat-label">Done Today</div></div>
-          <div className="stat-card"><div className="stat-icon">%</div><span className="stat-value">{ms.pct}%</span><div className="stat-label">Completion</div></div>
-          <div className="stat-card"><div className="stat-icon">F</div><span className="stat-value">{fs}</span><div className="stat-label">Focus Score</div></div>
+          <div className="stat-card"><div className="stat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 23c-1.5 0-6-1-6-7 0-3 1.5-5 3-7 .5 2 2 3 3 3s2.5-1.5 3-4c2.5 3 3 5.5 3 8 0 6-4.5 7-6 7z" fill="#fbbf24" stroke="#f59e0b" strokeWidth="1"/></svg></div><span className="stat-value">{cs}</span><div className="stat-label">Current Streak</div></div>
+          <div className="stat-card"><div className="stat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg></div><span className="stat-value">{todayStats.done}</span><div className="stat-label">Done Today</div></div>
+          <div className="stat-card"><div className="stat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg></div><span className="stat-value">{ms.pct}%</span><div className="stat-label">Completion</div></div>
+          <div className="stat-card"><div className="stat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="#22d3ee"/></svg></div><span className="stat-value">{fs}</span><div className="stat-label">Focus Score</div></div>
         </div>
         <TopHabitsCard rows={rows} />
         <DailyProgressCard rows={rows} daysCount={days.length} />
-        <div className="quote-strip">Keep forging. You've got this.</div>
+        <div className="quote-strip">✦ {pick(BOTTOM_QUOTES)} ✦</div>
       </section>
     </main>
   );
