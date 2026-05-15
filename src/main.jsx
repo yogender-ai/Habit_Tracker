@@ -139,6 +139,8 @@ function readLocal(u,k) { try{return JSON.parse(localStorage.getItem(`dayforge_$
 function writeLocal(u,k,v) { localStorage.setItem(`dayforge_${u}_${k}`,JSON.stringify(v)); }
 function readLocalWorkspace(u) { return readLocal(u, "workspace"); }
 function writeLocalWorkspace(u, workspace) { writeLocal(u, "workspace", workspace); }
+function readPrivacySettings(u) { return readLocal(u, "privacy"); }
+function writePrivacySettings(u, settings) { writeLocal(u, "privacy", settings); }
 function apiBase() { const c=String(CONFIG.apiBaseUrl||"").trim().replace(/\/$/,""); if(c) return c; if(location.hostname==="127.0.0.1"||location.hostname==="localhost") return "http://127.0.0.1:8000"; return location.origin; }
 function hasFirebaseConfig() { const f=CONFIG.firebase||{}; return Boolean(f.apiKey&&f.authDomain&&f.projectId&&f.appId); }
 function normalizeHabit(h) { return { id:String(h.id||uid()), title:String(h.title||"New habit").slice(0,90), category:String(h.category||"Focus").slice(0,40), targetPerWeek:Math.max(1,Math.min(7,Number(h.targetPerWeek||h.target||5))), active:h.active!==false, createdAt:h.createdAt||new Date().toISOString() }; }
@@ -189,6 +191,28 @@ function prettyReminderTime(value) {
   return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 function reminderStamp(reminder) { return `${reminder.date || ""}T${reminder.time || "00:00"}`; }
+function pinDigits(value) { return String(value || "").replace(/\D/g, "").slice(0, 4); }
+function randomSalt() {
+  const bytes = new Uint8Array(16);
+  if (crypto.getRandomValues) crypto.getRandomValues(bytes);
+  else bytes.forEach((_, index) => { bytes[index] = Math.floor(Math.random() * 256); });
+  return Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+}
+function simpleHash(input) {
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+async function hashPin(pin, salt) {
+  const input = `${salt}:${pin}`;
+  if (!crypto.subtle) return simpleHash(input);
+  const data = new TextEncoder().encode(input);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, "0")).join("");
+}
 
 function dayStats(checks={}, habits=[]) { const t=habits.length||1, d=habits.filter(h=>checks[h.id]).length; return {done:d,total:t,pct:Math.round((d/t)*100)}; }
 function buildMonthStats(grid,days,habits) { const daily=days.map(d=>dayStats(grid[toDateKey(d)]||{},habits)); const done=daily.reduce((s,i)=>s+i.done,0); const total=daily.reduce((s,i)=>s+i.total,0)||1; return {daily,done,total,pct:Math.round((done/total)*100)}; }
@@ -214,6 +238,12 @@ function App() {
   const [profileDraft, setProfileDraft] = useState("");
   const [notificationSettings, setNotificationSettings] = useState({});
   const [reminderState, setReminderState] = useState("Mail standby");
+  const [privacyReady, setPrivacyReady] = useState(false);
+  const [privacySettings, setPrivacySettings] = useState({});
+  const [privacyUnlocked, setPrivacyUnlocked] = useState(true);
+  const [privacyPin, setPrivacyPin] = useState("");
+  const [privacyUnlockPin, setPrivacyUnlockPin] = useState("");
+  const [privacyMessage, setPrivacyMessage] = useState("");
   const [heroImg] = useState(() => pick(HERO_IMAGES));
   const [quote] = useState(() => pick(QUOTES));
   const [missionLine] = useState(() => pick(MISSION_LINES));
@@ -235,12 +265,25 @@ function App() {
   useEffect(() => { document.body.dataset.theme = theme; localStorage.setItem("dayforge_theme", theme); }, [theme]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setPrivacyReady(false);
+      setPrivacyUnlocked(true);
+      setPrivacyUnlockPin("");
+      return;
+    }
     const localWorkspace = readLocalWorkspace(user.uid);
     const localProfile = localWorkspace.profile || {};
     const nextProfile = { ...localProfile, displayName: localProfile.displayName || defaultDisplayName(user) };
     const localSettings = localWorkspace.notificationSettings || {};
     const localHabits = (localWorkspace.habits || []).map(normalizeHabit).filter(h => !isLegacyDefaultHabit(h));
+    const localPrivacy = readPrivacySettings(user.uid);
+    const privacyEnabled = Boolean(localPrivacy.enabled && localPrivacy.pinHash && localPrivacy.salt);
+    setPrivacySettings(localPrivacy);
+    setPrivacyUnlocked(!privacyEnabled);
+    setPrivacyMessage(privacyEnabled ? "PIN required" : "Privacy lock off");
+    setPrivacyPin("");
+    setPrivacyUnlockPin("");
+    setPrivacyReady(true);
     setProfile(nextProfile);
     setProfileDraft(nextProfile.displayName || defaultDisplayName(user));
     setNotificationSettings(localSettings);
@@ -447,6 +490,64 @@ function App() {
     }
   }
 
+  async function enablePrivacyLock(e) {
+    e.preventDefault();
+    if (!user) return;
+    const pin = pinDigits(privacyPin);
+    if (pin.length !== 4) {
+      setPrivacyMessage("Use exactly 4 numbers");
+      return;
+    }
+    const salt = randomSalt();
+    const pinHash = await hashPin(pin, salt);
+    const settings = { enabled: true, salt, pinHash, updatedAt: new Date().toISOString() };
+    writePrivacySettings(user.uid, settings);
+    setPrivacySettings(settings);
+    setPrivacyUnlocked(true);
+    setPrivacyPin("");
+    setPrivacyMessage("Privacy lock on");
+  }
+
+  function disablePrivacyLock() {
+    if (!user) return;
+    const settings = { enabled: false, updatedAt: new Date().toISOString() };
+    writePrivacySettings(user.uid, settings);
+    setPrivacySettings(settings);
+    setPrivacyUnlocked(true);
+    setPrivacyPin("");
+    setPrivacyUnlockPin("");
+    setPrivacyMessage("Privacy lock off");
+  }
+
+  async function unlockPrivacy(e) {
+    e.preventDefault();
+    const pin = pinDigits(privacyUnlockPin);
+    if (!privacySettings.pinHash || !privacySettings.salt) {
+      setPrivacyUnlocked(true);
+      return;
+    }
+    if (pin.length !== 4) {
+      setPrivacyMessage("Enter 4 numbers");
+      return;
+    }
+    const pinHash = await hashPin(pin, privacySettings.salt);
+    if (pinHash !== privacySettings.pinHash) {
+      setPrivacyUnlockPin("");
+      setPrivacyMessage("Wrong PIN");
+      return;
+    }
+    setPrivacyUnlocked(true);
+    setPrivacyUnlockPin("");
+    setPrivacyMessage("Unlocked");
+  }
+
+  function lockDashboard() {
+    if (!privacySettings.enabled || !privacySettings.pinHash) return;
+    setPrivacyUnlocked(false);
+    setPrivacyUnlockPin("");
+    setPrivacyMessage("PIN required");
+  }
+
   async function handleAuth() { if (!auth) return; if (auth.currentUser) await signOut(auth); else await signInWithPopup(auth, new GoogleAuthProvider()); }
 
   if (!authReady) return (
@@ -499,6 +600,23 @@ function App() {
     );
   }
 
+  if (!privacyReady) {
+    return (
+      <div className="gate-screen">
+        <section className="privacy-gate-card">
+          <div className="privacy-lock-mark">••••</div>
+          <span className="gate-kicker">DayForge</span>
+          <h1>Preparing your private dashboard.</h1>
+        </section>
+      </div>
+    );
+  }
+
+  const displayName = profile.displayName || defaultDisplayName(user);
+  const firstName = displayName.split(" ")[0] || displayName;
+  const initials = displayName.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]?.toUpperCase()).join("") || "D";
+  const privacyEnabled = Boolean(privacySettings.enabled && privacySettings.pinHash && privacySettings.salt);
+
   if (activeHabits.length === 0) {
     return (
       <div className="gate-screen">
@@ -535,6 +653,22 @@ function App() {
     );
   }
 
+  if (privacyEnabled && !privacyUnlocked) {
+    return (
+      <PrivacyGate
+        displayName={displayName}
+        initials={initials}
+        pin={privacyUnlockPin}
+        setPin={setPrivacyUnlockPin}
+        message={privacyMessage}
+        onUnlock={unlockPrivacy}
+        onSignOut={handleAuth}
+        theme={theme}
+        setTheme={setTheme}
+      />
+    );
+  }
+
   const ms = buildMonthStats(grid, days, activeHabits);
   const ws = buildWeeklyStats(grid, days, activeHabits);
   const todayKey = toDateKey(new Date());
@@ -543,9 +677,6 @@ function App() {
   const ls = longestStreak(grid, activeHabits);
   const fs = focusScore(grid, days, activeHabits);
   const rows = habitRows(grid, days, activeHabits);
-  const displayName = profile.displayName || defaultDisplayName(user);
-  const firstName = displayName.split(" ")[0] || displayName;
-  const initials = displayName.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]?.toUpperCase()).join("") || "D";
 
   return (
     <main className="forge-screen">
@@ -563,6 +694,15 @@ function App() {
           </div>
           <button type="submit" title="Save profile name">Save</button>
         </form>
+        <PrivacyPanel
+          enabled={privacyEnabled}
+          pin={privacyPin}
+          setPin={setPrivacyPin}
+          message={privacyMessage}
+          onSave={enablePrivacyLock}
+          onDisable={disablePrivacyLock}
+          onLock={lockDashboard}
+        />
         <div className="select-row">
           <label>Month<select value={monthDate.getMonth()} onChange={e => setMonthDate(new Date(monthDate.getFullYear(), Number(e.target.value), 1))}>
             {Array.from({length:12},(_,i)=><option key={i} value={i}>{new Date(2026,i,1).toLocaleDateString("en-US",{month:"long"})}</option>)}
@@ -620,6 +760,71 @@ function App() {
 }
 
 /* SUB-COMPONENTS */
+
+function PrivacyGate({ displayName, initials, pin, setPin, message, onUnlock, onSignOut, theme, setTheme }) {
+  return (
+    <div className="privacy-gate-screen">
+      <section className="privacy-gate-card">
+        <div className="privacy-avatar">{initials}</div>
+        <span className="gate-kicker">Private Mode</span>
+        <h1>{displayName}'s dashboard is locked.</h1>
+        <form className="privacy-unlock-form" onSubmit={onUnlock}>
+          <input
+            value={pin}
+            onChange={e => setPin(pinDigits(e.target.value))}
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={4}
+            autoFocus
+            type="password"
+            placeholder="0000"
+            aria-label="4 digit PIN"
+          />
+          <button type="submit">Unlock</button>
+        </form>
+        <div className="privacy-dots" aria-hidden="true">
+          {Array.from({ length: 4 }, (_, index) => <i key={index} className={pin.length > index ? "filled" : ""} />)}
+        </div>
+        <p className="privacy-message">{message || "Enter your PIN"}</p>
+        <div className="privacy-gate-actions">
+          <button type="button" onClick={onSignOut}>Sign out</button>
+          <button type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>Theme</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function PrivacyPanel({ enabled, pin, setPin, message, onSave, onDisable, onLock }) {
+  return (
+    <div className={`privacy-panel ${enabled ? "enabled" : ""}`}>
+      <div className="privacy-panel-head">
+        <div>
+          <span>Privacy Lock</span>
+          <strong>{enabled ? "PIN on" : "Optional"}</strong>
+        </div>
+        {enabled && <button type="button" onClick={onLock}>Lock</button>}
+      </div>
+      <form className="privacy-pin-form" onSubmit={onSave}>
+        <input
+          value={pin}
+          onChange={e => setPin(pinDigits(e.target.value))}
+          inputMode="numeric"
+          pattern="[0-9]*"
+          maxLength={4}
+          type="password"
+          placeholder="4 digit PIN"
+          aria-label="Set 4 digit PIN"
+        />
+        <button type="submit">{enabled ? "Change" : "Turn on"}</button>
+      </form>
+      <div className="privacy-panel-foot">
+        <span>{message || (enabled ? "Dashboard asks PIN on open" : "Off by default")}</span>
+        {enabled && <button type="button" onClick={onDisable}>Turn off</button>}
+      </div>
+    </div>
+  );
+}
 
 function Ring({ value, size = 80 }) {
   return (

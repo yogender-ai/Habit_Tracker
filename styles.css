@@ -17,9 +17,9 @@
   --radius:16px;--radius-sm:10px;--ease:cubic-bezier(.22,1,.36,1);
 }
 body[data-theme="light"]{
-  --bg:#eef2f8;--surface:rgba(255,255,255,0.72);--surface2:rgba(255,255,255,0.92);
-  --glass:rgba(255,255,255,0.78);--glass2:rgba(255,255,255,0.9);--border:rgba(24,31,55,0.11);
-  --ink:#141827;--muted:#66708a;--dim:#98a1b5;
+  --bg:#e9eef6;--surface:rgba(248,250,252,0.92);--surface2:rgba(241,245,249,0.98);
+  --glass:rgba(255,255,255,0.96);--glass2:rgba(255,255,255,0.98);--border:rgba(50,61,87,0.18);
+  --ink:#111827;--muted:#4f5b73;--dim:#737f96;
   --purple:#7c5cff;--purple-glow:rgba(124,92,255,0.16);
   --indigo:#4f63e6;--indigo-glow:rgba(79,99,230,0.14);
   --mint:#0f9f6e;--mint-glow:rgba(15,159,110,0.12);
@@ -147,6 +147,43 @@ input:focus,select:focus{border-color:var(--purple)}
 .gate-card img{width:100%;height:400px;object-fit:cover;border-radius:var(--radius);filter:brightness(.9)}
 .gate-card small{display:block;margin-top:14px;color:var(--dim);font-weight:700;font-size:10px}
 .first-habit-card{min-height:520px}
+.privacy-gate-screen{min-height:100vh;display:grid;place-items:center;padding:28px;position:relative;z-index:1}
+.privacy-gate-card{
+  width:min(440px,100%);display:grid;justify-items:center;gap:14px;padding:34px;
+  border:1px solid var(--border);border-radius:24px;background:var(--glass2);
+  backdrop-filter:blur(34px);box-shadow:0 24px 80px rgba(0,0,0,0.34);
+  animation:fadeIn .45s var(--ease);
+}
+.privacy-gate-card h1{
+  max-width:330px;margin:0;text-align:center;font-family:'Space Grotesk',sans-serif;
+  font-size:clamp(28px,4vw,42px);line-height:1.08;letter-spacing:-.03em;
+  color:var(--ink);
+}
+.privacy-avatar,.privacy-lock-mark{
+  width:62px;height:62px;border-radius:18px;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--purple),var(--indigo) 58%,var(--mint));
+  color:#fff;font-size:18px;font-weight:900;box-shadow:0 18px 44px var(--purple-glow);
+}
+.privacy-lock-mark{font-family:'JetBrains Mono',monospace;font-size:14px;letter-spacing:3px}
+.privacy-unlock-form{width:100%;display:grid;grid-template-columns:minmax(0,1fr) 104px;gap:8px}
+.privacy-unlock-form input{
+  height:48px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:900;
+  letter-spacing:8px;border-radius:12px;
+}
+.privacy-unlock-form button{
+  border-radius:12px;background:linear-gradient(135deg,var(--indigo),var(--purple));
+  color:#fff;font-size:12px;font-weight:900;box-shadow:0 12px 26px var(--purple-glow);
+}
+.privacy-dots{display:flex;gap:8px}
+.privacy-dots i{width:9px;height:9px;border-radius:999px;background:var(--surface2);border:1px solid var(--border)}
+.privacy-dots i.filled{background:var(--purple);box-shadow:0 0 14px var(--purple-glow)}
+.privacy-message{min-height:18px;color:var(--muted);font-size:11px;font-weight:800;text-align:center}
+.privacy-gate-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%}
+.privacy-gate-actions button{
+  min-height:36px;border-radius:10px;border:1px solid var(--border);
+  background:var(--surface);color:var(--ink);font-size:11px;font-weight:900;
+}
+.privacy-gate-actions button:hover{border-color:var(--purple);color:var(--purple)}
 .first-habit-form{display:grid;grid-template-columns:minmax(0,1fr) 96px;gap:10px;margin-top:22px;max-width:500px}
 .first-habit-form input{min-height:46px;padding:0 14px;font-size:14px;font-weight:700}
 .first-habit-form button{min-height:46px;border:0;border-radius:var(--radius-sm);background:linear-gradient(135deg,var(--indigo),var(--purple));color:#fff;font-size:13px;font-weight:800}
@@ -273,6 +310,34 @@ input:focus,select:focus{border-color:var(--purple)}
   color:var(--ink);font-size:9px;font-weight:900;transition:all .2s var(--ease);
 }
 .profile-card button:hover{border-color:var(--mint);color:var(--mint);box-shadow:0 0 14px var(--mint-glow)}
+.privacy-panel{
+  display:grid;gap:7px;padding:9px;border:1px solid var(--border);border-radius:12px;
+  background:linear-gradient(135deg,rgba(255,255,255,0.055),rgba(167,139,250,0.055));
+}
+.privacy-panel.enabled{border-color:rgba(52,211,153,0.26);background:linear-gradient(135deg,rgba(52,211,153,0.10),rgba(167,139,250,0.055))}
+.privacy-panel-head,.privacy-panel-foot{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.privacy-panel-head div{display:grid;gap:2px;min-width:0}
+.privacy-panel-head span{
+  color:var(--muted);font-size:8px;font-weight:900;letter-spacing:2px;text-transform:uppercase;
+}
+.privacy-panel-head strong{color:var(--ink);font-size:12px;font-weight:900}
+.privacy-panel-head button,.privacy-panel-foot button{
+  min-height:24px;padding:0 9px;border-radius:8px;border:1px solid var(--border);
+  background:rgba(255,255,255,0.06);color:var(--ink);font-size:8px;font-weight:900;
+  letter-spacing:.4px;text-transform:uppercase;transition:all .2s var(--ease);white-space:nowrap;
+}
+.privacy-panel-head button:hover{border-color:var(--purple);color:var(--purple)}
+.privacy-panel-foot button:hover{border-color:var(--red);color:var(--red)}
+.privacy-pin-form{display:grid;grid-template-columns:minmax(0,1fr) 70px;gap:6px}
+.privacy-pin-form input{
+  height:30px;padding:0 10px;border-radius:8px;font-size:11px;font-weight:800;
+  letter-spacing:1.5px;text-align:center;
+}
+.privacy-pin-form button{
+  min-height:30px;border-radius:8px;background:linear-gradient(135deg,var(--indigo),var(--purple));
+  color:#fff;font-size:9px;font-weight:900;
+}
+.privacy-panel-foot span{min-width:0;color:var(--dim);font-size:8px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .select-row{display:grid;gap:5px}
 .select-row label{
   display:grid;grid-template-columns:1fr 1.2fr;align-items:center;min-height:32px;
@@ -654,6 +719,81 @@ body[data-theme="light"] .mission-banner{
 body[data-theme="light"] .dp-table td{color:rgba(20,24,39,.74)}
 body[data-theme="light"] .dp-table th{background:rgba(248,250,252,.92)}
 body[data-theme="light"] .reminder-form input::-webkit-calendar-picker-indicator{filter:none}
+body[data-theme="light"] .forge-screen{filter:none}
+body[data-theme="light"] .left-panel,
+body[data-theme="light"] .stat-card,
+body[data-theme="light"] .top-habits-card,
+body[data-theme="light"] .daily-progress-card,
+body[data-theme="light"] .reminder-card,
+body[data-theme="light"] .heatmap-card,
+body[data-theme="light"] .weekly-card,
+body[data-theme="light"] .progress-banner,
+body[data-theme="light"] .mission-banner,
+body[data-theme="light"] .habit-list-card{
+  background:rgba(255,255,255,.97);
+  border-color:rgba(57,67,94,.18);
+}
+body[data-theme="light"] .mission-banner{
+  background:linear-gradient(135deg,rgba(255,255,255,.98),rgba(236,232,255,.92));
+}
+body[data-theme="light"] .progress-track,
+body[data-theme="light"] .top-habit-bar,
+body[data-theme="light"] .dp-table .mini-bar{
+  background:#dfe6f1;
+}
+body[data-theme="light"] .heatmap-cell.habit-miss,
+body[data-theme="light"] .heatmap-cell.lv0{
+  background:#edf1f7;
+  border-color:#d2dae8;
+}
+body[data-theme="light"] .heatmap-cell.habit-done{
+  background:rgba(15,159,110,.25);
+  border-color:rgba(15,159,110,.42);
+}
+body[data-theme="light"] .selected-day-check,
+body[data-theme="light"] .reminder-title-field,
+body[data-theme="light"] .reminder-field,
+body[data-theme="light"] .name-capture label{
+  background:#f8fafc;
+  border-color:#d4dbea;
+}
+body[data-theme="light"] .selected-day-check.done{
+  background:rgba(15,159,110,.14);
+  border-color:rgba(15,159,110,.48);
+}
+body[data-theme="light"] .heatmap-grid .day-label,
+body[data-theme="light"] .heatmap-grid .col-header,
+body[data-theme="light"] .week-ring span,
+body[data-theme="light"] .week-ring .week-meta,
+body[data-theme="light"] .heatmap-legend,
+body[data-theme="light"] .sync-line,
+body[data-theme="light"] .quote-strip{
+  color:#5f6b82;
+}
+body[data-theme="light"] .card-header h3,
+body[data-theme="light"] .weekly-title,
+body[data-theme="light"] .heatmap-title,
+body[data-theme="light"] .progress-banner-label,
+body[data-theme="light"] .stat-card .stat-label{
+  color:#59647c;
+}
+body[data-theme="light"] .top-habit-name,
+body[data-theme="light"] .reminder-item .r-title,
+body[data-theme="light"] .selected-day-check,
+body[data-theme="light"] .dp-table td:first-child{
+  color:#172033;
+}
+body[data-theme="light"] .ring-bg{stroke:#dde5f0}
+body[data-theme="light"] .profile-card,
+body[data-theme="light"] .privacy-panel{
+  background:linear-gradient(135deg,#f8fafc,#eef2ff);
+  border-color:#d4dbea;
+}
+body[data-theme="light"] .privacy-pin-form input,
+body[data-theme="light"] .privacy-unlock-form input{
+  background:#f8fafc;
+  border-color:#cfd8e8;
+}
 
 /* ── RESPONSIVE ────────────────────────── */
 @media(max-width:1200px){
