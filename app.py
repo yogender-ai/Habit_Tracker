@@ -353,6 +353,20 @@ def safe_timezone(name):
         return "UTC"
 
 
+def normalize_sleep_entry(entry):
+    if not isinstance(entry, dict):
+        return None
+    sleep_time = clean_text(entry.get("time"), 40)
+    if not sleep_time:
+        return None
+    return {
+        "time": sleep_time,
+        "display": clean_text(entry.get("display"), 20),
+        "woke": clean_text(entry.get("woke"), 40),
+        "wokeDisplay": clean_text(entry.get("wokeDisplay"), 20),
+    }
+
+
 def normalize_day(date_key, payload):
     payload = payload if isinstance(payload, dict) else {}
     status = payload.get("status") if payload.get("status") in DAY_STATUSES else "neutral"
@@ -385,6 +399,12 @@ def normalize_day(date_key, payload):
             if habit_id:
                 habit_checks[habit_id] = bool(value)
 
+    sleep_entries = []
+    for entry in payload.get("sleepEntries", [])[:12]:
+        normalized = normalize_sleep_entry(entry)
+        if normalized:
+            sleep_entries.append(normalized)
+
     focus_line = clean_text(payload.get("focusLine") or payload.get("motivation"), 180)
 
     return {
@@ -400,6 +420,7 @@ def normalize_day(date_key, payload):
         "reflection": clean_text(payload.get("reflection"), 700),
         "habitChecks": habit_checks,
         "tasks": tasks,
+        "sleepEntries": sleep_entries,
         "updatedAt": clean_text(payload.get("updatedAt") or utc_now().isoformat(), 40),
     }
 

@@ -150,6 +150,8 @@ function readPrivacySettings(u) { return readLocal(u, "privacy"); }
 function writePrivacySettings(u, settings) { writeLocal(u, "privacy", settings); }
 function readLegacyTemptations() { try { return JSON.parse(localStorage.getItem("dayforge_temptations") || "[]"); } catch { return []; } }
 function writeLegacyTemptations(temptations) { localStorage.setItem("dayforge_temptations", JSON.stringify(temptations)); }
+function readLegacySleepLog() { try { return JSON.parse(localStorage.getItem("dayforge_sleep") || "{}"); } catch { return {}; } }
+function writeLegacySleepLog(log) { localStorage.setItem("dayforge_sleep", JSON.stringify(log)); }
 function apiBase() { const c=String(CONFIG.apiBaseUrl||"").trim().replace(/\/$/,""); if(c) return c; if(location.hostname==="127.0.0.1"||location.hostname==="localhost") return "http://127.0.0.1:8000"; return location.origin; }
 function hasFirebaseConfig() { const f=CONFIG.firebase||{}; return Boolean(f.apiKey&&f.authDomain&&f.projectId&&f.appId); }
 function normalizeHabit(h) { return { id:String(h.id||uid()), title:String(h.title||"New habit").slice(0,90), category:String(h.category||"Focus").slice(0,40), targetPerWeek:Math.max(1,Math.min(7,Number(h.targetPerWeek||h.target||5))), active:h.active!==false, createdAt:h.createdAt||"1970-01-01T00:00:00.000Z", deletedAt:h.deletedAt||(h.active===false?(h.updatedAt||new Date().toISOString()):"") }; }
@@ -356,6 +358,45 @@ function normalizeExtraItem(item = {}) {
     createdAt: item.createdAt || new Date().toISOString(),
   };
 }
+function normalizeSleepEntry(entry = {}) {
+  const time = String(entry.time || "").slice(0, 40);
+  if (!time) return null;
+  return {
+    time,
+    display: String(entry.display || "").slice(0, 20),
+    woke: entry.woke ? String(entry.woke).slice(0, 40) : "",
+    wokeDisplay: entry.wokeDisplay ? String(entry.wokeDisplay).slice(0, 20) : "",
+  };
+}
+function normalizeSleepLog(log = {}) {
+  const clean = {};
+  if (!log || typeof log !== "object") return clean;
+  Object.entries(log).forEach(([dateKey, entries]) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || !Array.isArray(entries)) return;
+    const normalized = entries.map(normalizeSleepEntry).filter(Boolean).slice(0, 12);
+    if (normalized.length) clean[dateKey] = normalized;
+  });
+  return clean;
+}
+function mergeSleepEntries(primary = [], secondary = []) {
+  const seen = new Set();
+  return [...primary, ...secondary].map(normalizeSleepEntry).filter(Boolean).filter(entry => {
+    const key = `${entry.time}|${entry.woke || ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 12);
+}
+function readLocalSleepLog(userId) {
+  const scoped = normalizeSleepLog(readLocal(userId, "sleep"));
+  if (Object.keys(scoped).length) return scoped;
+  return normalizeSleepLog(readLegacySleepLog());
+}
+function writeLocalSleepLog(userId, log) {
+  const clean = normalizeSleepLog(log);
+  writeLocal(userId, "sleep", clean);
+  writeLegacySleepLog(clean);
+}
 function normalizeReminder(reminder = {}) {
   return {
     id: String(reminder.id || uid()),
@@ -447,9 +488,7 @@ function App() {
   const [extraDraft, setExtraDraft] = useState("");
   const [temptations, setTemptations] = useState(() => readLegacyTemptations().map(normalizeTemptation).filter(Boolean));
   const [temptDraft, setTemptDraft] = useState("");
-  const [sleepLog, setSleepLog] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("dayforge_sleep") || "{}"); } catch { return {}; }
-  });
+  const [sleepLog, setSleepLog] = useState(() => normalizeSleepLog(readLegacySleepLog()));
 
   const days = useMemo(() => monthDays(monthDate), [monthDate]);
   const monthId = monthKey(monthDate);
@@ -507,6 +546,7 @@ function App() {
     const localHabits = (localWorkspace.habits || []).map(normalizeHabit).filter(h => !isLegacyDefaultHabit(h));
     const localTemptations = ((localWorkspace.temptations || []).length ? localWorkspace.temptations : readLegacyTemptations()).map(normalizeTemptation).filter(Boolean);
     const localPreferences = normalizePreferences(localWorkspace.preferences || {});
+    const localSleep = readLocalSleepLog(user.uid);
     const localPrivacy = newestPrivacySettings(localWorkspace.privacySettings || {}, readPrivacySettings(user.uid));
     const privacyEnabled = privacyIsEnabled(localPrivacy);
     setWorkspaceReady(hasPrimaryWorkspaceData(localWorkspace) || hasPrimaryWorkspaceData(pendingWorkspace));
@@ -522,6 +562,8 @@ function App() {
     setReminders((localWorkspace.reminders || []).map(normalizeReminder));
     setTemptations(localTemptations);
     writeLegacyTemptations(localTemptations);
+    setSleepLog(localSleep);
+    writeLocalSleepLog(user.uid, localSleep);
     if (localWorkspace.preferences?.theme) setTheme(localPreferences.theme);
     setHabits(localHabits);
     setGrid(readLocal(user.uid, monthId));
@@ -531,6 +573,7 @@ function App() {
   }, [user, monthId]);
   useEffect(() => { if (!user) return; writeLocal(user.uid, monthId, grid); }, [grid, monthId, user]);
   useEffect(() => { if (!user) return; writeLocal(user.uid, `${monthId}_extras`, dailyExtras); }, [dailyExtras, monthId, user]);
+  useEffect(() => { if (!user) return; writeLocalSleepLog(user.uid, sleepLog); }, [sleepLog, user]);
   useEffect(() => {
     const timer = window.setInterval(() => {
       const nextKey = dayforgeTodayKey();
@@ -786,41 +829,62 @@ function App() {
       const syncedHabits = (workspaceForMonth.habits || []).map(normalizeHabit).filter(h => !isLegacyDefaultHabit(h));
       const ng = {};
       const nextExtras = {};
+      const nextSleepLog = {};
       const habitIds = new Set(syncedHabits.map(h => h.id));
       const localGrid = readLocal(user.uid, monthId);
       const localExtras = readLocal(user.uid, `${monthId}_extras`);
+      const localSleep = readLocalSleepLog(user.uid);
       const currentPendingDays = readPendingSync(user.uid).days;
       const daysToUpload = [];
-      days.forEach(d => {
-        const k = toDateKey(d);
+      const candidateDateKeys = new Set([
+        ...days.map(toDateKey),
+        ...Object.keys(p.days || {}),
+        ...Object.keys(localSleep),
+        ...Object.keys(currentPendingDays),
+      ]);
+      Array.from(candidateDateKeys).sort().forEach(k => {
         const pendingDay = currentPendingDays[k]?.day;
         const remoteDay = p.days?.[k];
         if (pendingDay) {
           ng[k] = pendingDay.habitChecks || localGrid[k] || {};
           const extras = extrasFromDay(pendingDay, habitIds);
+          const sleepEntries = (pendingDay.sleepEntries || localSleep[k] || []).map(normalizeSleepEntry).filter(Boolean);
           if (extras.length) nextExtras[k] = extras;
           else if ((localExtras[k] || []).length) nextExtras[k] = (localExtras[k] || []).map(normalizeExtraItem).filter(Boolean);
+          if (sleepEntries.length) nextSleepLog[k] = sleepEntries;
           return;
         }
         if (remoteDay) {
           ng[k] = remoteDay.habitChecks || {};
           const extras = extrasFromDay(remoteDay, habitIds);
+          const remoteSleepEntries = (remoteDay.sleepEntries || []).map(normalizeSleepEntry).filter(Boolean);
+          const localSleepEntries = (localSleep[k] || []).map(normalizeSleepEntry).filter(Boolean);
+          const sleepEntries = mergeSleepEntries(remoteSleepEntries, localSleepEntries);
           if (extras.length) nextExtras[k] = extras;
+          if (sleepEntries.length) nextSleepLog[k] = sleepEntries;
+          if (sleepEntries.length > remoteSleepEntries.length) {
+            daysToUpload.push({ dateKey: k, checks: ng[k], extras, sleepEntries });
+          }
           return;
         }
         const checks = localGrid[k] || {};
         const extras = (localExtras[k] || []).map(normalizeExtraItem).filter(Boolean);
+        const sleepEntries = (localSleep[k] || []).map(normalizeSleepEntry).filter(Boolean);
         ng[k] = checks;
         if (extras.length) nextExtras[k] = extras;
-        if (Object.keys(checks).length || extras.length) {
-          daysToUpload.push({ dateKey: k, checks, extras });
+        if (sleepEntries.length) nextSleepLog[k] = sleepEntries;
+        if (Object.keys(checks).length || extras.length || sleepEntries.length) {
+          daysToUpload.push({ dateKey: k, checks, extras, sleepEntries });
         }
       });
       setGrid(ng);
       setDailyExtras(nextExtras);
-      daysToUpload.forEach(({ dateKey, checks, extras }) => {
+      setSleepLog(nextSleepLog);
+      writeLocalSleepLog(user.uid, nextSleepLog);
+      daysToUpload.forEach(({ dateKey, checks, extras, sleepEntries }) => {
         const extrasByDay = { ...localExtras, [dateKey]: extras };
-        const day = buildDayPayload(dateKey, checks, extrasByDay, syncedHabits);
+        const sleepByDay = { ...localSleep, [dateKey]: sleepEntries };
+        const day = buildDayPayload(dateKey, checks, extrasByDay, syncedHabits, sleepByDay);
         const queued = queuePendingDay(user.uid, dateKey, day);
         putJson(`/api/days/${dateKey}`, { day: queued.day })
           .then(async dayResponse => {
@@ -871,11 +935,12 @@ function App() {
     ];
   }
 
-  function buildDayPayload(dk, checks, extrasByDay = dailyExtras, sourceHabits = trackedHabits) {
+  function buildDayPayload(dk, checks, extrasByDay = dailyExtras, sourceHabits = trackedHabits, sleepByDay = sleepLog) {
     const dayHabits = habitsForDayKey(dk, sourceHabits);
     const done = dayHabits.filter(h => checks[h.id]).length;
     const status = done === dayHabits.length && dayHabits.length ? "won" : done > 0 ? "neutral" : "missed";
-    return { dateKey: dk, status, focusLine: quote, habitChecks: checks, tasks: tasksForDay(dk, checks, extrasByDay, sourceHabits) };
+    const sleepEntries = (sleepByDay[dk] || []).map(normalizeSleepEntry).filter(Boolean);
+    return { dateKey: dk, status, focusLine: quote, habitChecks: checks, tasks: tasksForDay(dk, checks, extrasByDay, sourceHabits), sleepEntries };
   }
 
   function canEditDay(dk) {
@@ -887,13 +952,13 @@ function App() {
     setSyncState(dk < today ? `History locked: ${dk}` : `Only today is editable: ${dk}`);
   }
 
-  async function pushDay(dk, checks, extrasByDay = dailyExtras) {
+  async function pushDay(dk, checks, extrasByDay = dailyExtras, sleepByDay = sleepLog) {
     if (!user) return;
     if (!canEditDay(dk)) {
       showDayLocked(dk);
       return;
     }
-    const day = buildDayPayload(dk, checks, extrasByDay);
+    const day = buildDayPayload(dk, checks, extrasByDay, trackedHabits, sleepByDay);
     const queued = queuePendingDay(user.uid, dk, day);
     try {
       const r = await putJson(`/api/days/${dk}`, { day: queued.day });
@@ -993,6 +1058,14 @@ function App() {
       { temptations: clean },
       { saved: "Temptations saved", failed: "Temptation save failed", local: "Temptations saved locally, will sync" }
     );
+  }
+
+  function saveSleepLog(next, dateKey = dayforgeTodayKey()) {
+    const clean = normalizeSleepLog(next);
+    setSleepLog(clean);
+    if (user) writeLocalSleepLog(user.uid, clean);
+    else writeLegacySleepLog(clean);
+    pushDay(dateKey, grid[dateKey] || {}, dailyExtras, clean);
   }
 
   async function saveWorkspaceWithReminders(nr) {
@@ -1376,8 +1449,7 @@ function App() {
             const key = dayforgeTodayKey();
             const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
             const next = { ...sleepLog, [key]: [...(sleepLog[key] || []), { time: now.toISOString(), display: timeStr }] };
-            setSleepLog(next);
-            localStorage.setItem("dayforge_sleep", JSON.stringify(next));
+            saveSleepLog(next, key);
           }}
           onWake={() => {
             const now = new Date();
@@ -1388,8 +1460,7 @@ function App() {
             const wakeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
             const updated = [...existing.slice(0, -1), { ...last, woke: now.toISOString(), wokeDisplay: wakeStr }];
             const next = { ...sleepLog, [key]: updated };
-            setSleepLog(next);
-            localStorage.setItem("dayforge_sleep", JSON.stringify(next));
+            saveSleepLog(next, key);
           }}
         />
         <TopHabitsCard rows={rows} />
