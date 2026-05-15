@@ -501,7 +501,8 @@ input:focus,select:focus{border-color:var(--purple)}
 /* Heatmap */
 .heatmap-card{
   border:1px solid var(--border);border-radius:var(--radius);background:var(--glass);
-  padding:14px;overflow-y:auto;overflow-x:hidden;transition:border-color .3s;flex-shrink:0;
+  padding:14px;transition:border-color .3s;
+  flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;
 }
 .heatmap-card:hover{border-color:rgba(167,139,250,0.12)}
 .heatmap-title{
