@@ -113,7 +113,7 @@ function App() {
   const [selectedDate, setSelectedDate] = useState(toDateKey(new Date()));
   const [habits, setHabits] = useState(DEFAULT_HABITS);
   const [grid, setGrid] = useState({});
-  const [theme, setTheme] = useState(localStorage.getItem("dayforge_theme") || "light");
+  const [theme, setTheme] = useState(localStorage.getItem("dayforge_theme") || "dark");
   const [syncState, setSyncState] = useState("Waiting for sign in");
   const [habitDraft, setHabitDraft] = useState("");
   const [welcomeState, setWelcomeState] = useState("");
@@ -303,15 +303,15 @@ function App() {
 
   if (!user) {
     return (
-      <div className={`gate-screen ${theme}`}>
+      <div className={`gate-screen ${theme}`} style={{position:'relative',zIndex:1}}>
         <section className="gate-card">
           <div>
             <span className="gate-kicker">Day Forge</span>
             <h1>Sign in to enter your monthly habit command center.</h1>
             <p>Your habits, monthly grid, welcome email, and progress sync only after Google sign-in.</p>
-            <button type="button" className="primary-button" onClick={handleAuth}>Sign in with Google</button>
+            <button type="button" className="primary-button" onClick={handleAuth}>⚡ Sign in with Google</button>
             <button type="button" className="theme-button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
-              {theme === "dark" ? "Light theme" : "Dark theme"}
+              {theme === "dark" ? "☀️ Light" : "🌙 Dark"}
             </button>
             <small>{syncState}</small>
           </div>
@@ -367,7 +367,7 @@ function App() {
         <div className="account-row">
           <button className="auth-button" type="button" onClick={handleAuth}>Sign out</button>
           <button className="theme-button small" type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
-            {theme === "dark" ? "Light" : "Dark"}
+            {theme === "dark" ? "☀️" : "🌙"}
           </button>
         </div>
         <p className="sync-line">{syncState} · {welcomeState}</p>
@@ -394,7 +394,7 @@ function App() {
         </div>
         <TopHabits grid={grid} days={days} habits={activeHabits} />
         <DailyProgress grid={grid} days={days} habits={activeHabits} />
-        <div className="quote-strip">Over 100% on habits, keep going.</div>
+        <div className="quote-strip">✦ Over 100% on habits, keep going ✦</div>
       </section>
     </main>
   );
@@ -449,8 +449,11 @@ function longestRun(values) {
 function Ring({ value, size = 96 }) {
   return (
     <svg className="ring" width={size} height={size} viewBox="0 0 100 100" style={{ "--value": value }}>
+      <defs>
+        <filter id="ringGlow"><feGaussianBlur stdDeviation="2" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+      </defs>
       <circle className="ring-bg" cx="50" cy="50" r="39" />
-      <circle className="ring-fg" cx="50" cy="50" r="39" />
+      <circle className="ring-fg" cx="50" cy="50" r="39" filter="url(#ringGlow)" />
       <text x="50" y="55" textAnchor="middle">{value}%</text>
     </svg>
   );
@@ -468,12 +471,20 @@ function AreaCurve({ days, grid, habits }) {
       <svg viewBox="0 0 100 100" preserveAspectRatio="none">
         <defs>
           <linearGradient id="areaFill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#b9c8ff" stopOpacity="0.78" />
-            <stop offset="100%" stopColor="#dfe6ff" stopOpacity="0.18" />
+            <stop offset="0%" stopColor="#818cf8" stopOpacity="0.4" />
+            <stop offset="50%" stopColor="#34d399" stopOpacity="0.15" />
+            <stop offset="100%" stopColor="#818cf8" stopOpacity="0.02" />
           </linearGradient>
+          <linearGradient id="lineGrad" x1="0" x2="1" y1="0" y2="0">
+            <stop offset="0%" stopColor="#818cf8" />
+            <stop offset="50%" stopColor="#34d399" />
+            <stop offset="100%" stopColor="#22d3ee" />
+          </linearGradient>
+          <filter id="areaGlow"><feGaussianBlur stdDeviation="1.5" /></filter>
         </defs>
         <polygon points={`0,100 ${points} 100,100`} fill="url(#areaFill)" />
-        <polyline points={points} fill="none" stroke="#91a9ec" strokeWidth="1.4" />
+        <polyline points={points} fill="none" stroke="url(#lineGrad)" strokeWidth="1.6" filter="url(#areaGlow)" />
+        <polyline points={points} fill="none" stroke="url(#lineGrad)" strokeWidth="1.2" />
       </svg>
     </div>
   );
