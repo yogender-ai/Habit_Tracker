@@ -1780,10 +1780,10 @@ function SleepCard({ log, todayKey, onSleep, onWake }) {
         <div className="sleep-entries">
           {todayEntries.map((entry, i) => (
             <div key={i} className={`sleep-entry ${entry.woke ? "complete" : "active"}`}>
-              <span className="sleep-time">Sleep {entry.display}</span>
-              {entry.woke && <span className="wake-time">Wake {entry.wokeDisplay}</span>}
+              <span className="sleep-time">🌙 {entry.display}</span>
+              {entry.woke && <span className="wake-time">☀️ {entry.wokeDisplay}</span>}
               {entry.woke && <span className="sleep-duration">{durationStr(entry.time, entry.woke)}</span>}
-              {!entry.woke && <span className="sleep-active">sleeping...</span>}
+              {!entry.woke && <span className="sleep-active">💤 sleeping...</span>}
             </div>
           ))}
         </div>
@@ -1796,7 +1796,7 @@ function SleepCard({ log, todayKey, onSleep, onWake }) {
             return (
               <div key={day} className="sleep-history-item">
                 <span>{day}</span>
-                <span>{lastComplete ? `${lastComplete.display} to ${lastComplete.wokeDisplay} (${durationStr(lastComplete.time, lastComplete.woke)})` : entries.length ? `${entries[0].display}` : "-"}</span>
+                <span>{lastComplete ? `${lastComplete.display} → ${lastComplete.wokeDisplay} (${durationStr(lastComplete.time, lastComplete.woke)})` : entries.length ? `${entries[0].display}` : "—"}</span>
               </div>
             );
           })}
