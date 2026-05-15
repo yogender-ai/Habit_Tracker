@@ -1,5 +1,5 @@
 window.DAYFORGE_CONFIG = {
-    apiBaseUrl: "https://habit-tracker-9a2o.onrender.com",
+    apiBaseUrl: "",
     firebase: {
         apiKey: "AIzaSyAYzoiG5XGYQLcYhq4ixBRyF4_l0Gl-1yY",
         authDomain: "news-intel-d1bd3.firebaseapp.com",

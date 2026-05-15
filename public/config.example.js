@@ -1,6 +1,6 @@
 window.DAYFORGE_CONFIG = {
-    // Leave empty when Vercel rewrites /api/* to Render, or set your Render API URL.
-    apiBaseUrl: "https://habit-tracker-9a2o.onrender.com",
+    // Leave empty when VITE_API_BASE_URL is set in Vercel.
+    apiBaseUrl: "",
     firebase: {
         apiKey: "your-firebase-web-api-key",
         authDomain: "your-project.firebaseapp.com",

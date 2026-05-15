@@ -35,11 +35,11 @@ window.DAYFORGE_CONFIG = {
 You can also set the same connection at build time with Vite env vars:
 
 ```bash
-VITE_API_BASE_URL=https://habit-tracker-9a2o.onrender.com
+VITE_API_BASE_URL=https://your-render-service.onrender.com
 VITE_APP_TIMEZONE=Asia/Kolkata
 ```
 
-The frontend always saves to `localStorage` first. In local dev, an empty `apiBaseUrl` points to `http://127.0.0.1:8000`. On Vercel, `vercel.json` proxies `/api/*` and `/health` to the Render backend before falling back to the SPA route.
+The frontend always saves to `localStorage` first. In local dev, an empty `apiBaseUrl` points to `http://127.0.0.1:8000`. On Vercel, set `VITE_API_BASE_URL` to your Render backend URL so the built frontend calls it directly.
 
 ## Local Backend
 
@@ -76,7 +76,7 @@ For Resend, `RESEND_FROM_EMAIL` must use a sender/domain verified in Resend. Kee
 Create a cron job from Render Cron, cron-job.org, GitHub Actions, or any scheduler that calls:
 
 ```bash
-POST https://habit-tracker-9a2o.onrender.com/api/notifications/due
+POST https://your-render-service.onrender.com/api/notifications/due
 X-Cron-Secret: your-NOTIFICATION_CRON_SECRET
 ```
 
