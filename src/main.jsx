@@ -1082,7 +1082,7 @@ function Heatmap({ days, grid, habits, todayKey, selectedDate, onSelect, onToggl
         })}
         {habits.map(h => (
           <React.Fragment key={h.id}>
-            <div className="day-label habit-label" title={h.title}>{h.title.length > 6 ? h.title.slice(0,6) + ".." : h.title}</div>
+            <div className="day-label habit-label" title={h.title}>{h.title.length > 8 ? h.title.slice(0,8) + ".." : h.title}</div>
             {days.map(d => {
               const k = toDateKey(d);
               const checked = Boolean((grid[k] || {})[h.id]);
@@ -1169,7 +1169,7 @@ function WeeklySection({ weeks }) {
       <div className="ring-row">
         {weeks.map(w => (
           <div className="week-ring" key={w.label}>
-            <Ring value={w.pct} size={72} />
+            <Ring value={w.pct} size={82} />
             <span>{w.label}</span>
             <span className="week-meta">{w.range}</span>
           </div>
