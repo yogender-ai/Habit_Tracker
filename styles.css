@@ -568,12 +568,6 @@ input:focus,select:focus{border-color:var(--purple)}
 .selected-day-check.locked input{cursor:not-allowed}
 .selected-day-check.privacy-check{cursor:pointer}
 .privacy-blurred-text{filter:blur(4px);user-select:none}
-.inline-unlock-button{
-  width:100%;min-height:34px;margin-top:8px;border-radius:9px;
-  background:linear-gradient(135deg,var(--indigo),var(--purple));color:#fff;
-  font-size:10px;font-weight:900;letter-spacing:1px;text-transform:uppercase;
-  box-shadow:0 8px 22px var(--purple-glow);
-}
 .selected-day-empty{
   min-height:34px;display:grid;place-items:center;padding:0 10px;border:1px dashed var(--border);
   border-radius:8px;color:var(--dim);font-size:10px;font-weight:800;

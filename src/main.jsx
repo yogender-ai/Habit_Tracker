@@ -1876,9 +1876,6 @@ function Heatmap({ days, grid, habits, todayKey, selectedDate, onSelect, onToggl
           })}
           {selectedHabits.length === 0 && <div className="selected-day-empty">No habits were active on this day.</div>}
         </div>
-        {privacyLocked && selectedEditable && selectedHabits.some(h => h.locked) && (
-          <button type="button" className="inline-unlock-button" onClick={onRequestUnlock}>Unlock private habits</button>
-        )}
         <SleepDaySummary entries={sleepEntries} />
         <DailyNoteEditor
           selectedDate={selectedDate}
