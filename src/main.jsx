@@ -378,6 +378,19 @@ function normalizeSleepLog(log = {}) {
   });
   return clean;
 }
+function normalizeDailyNote(value = "") {
+  return String(value || "").replace(/\r/g, "").trim().slice(0, 700);
+}
+function normalizeDailyNotes(notes = {}) {
+  const clean = {};
+  if (!notes || typeof notes !== "object") return clean;
+  Object.entries(notes).forEach(([dateKey, value]) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return;
+    const note = normalizeDailyNote(value);
+    if (note) clean[dateKey] = note;
+  });
+  return clean;
+}
 function mergeSleepEntries(primary = [], secondary = []) {
   const seen = new Set();
   return [...primary, ...secondary].map(normalizeSleepEntry).filter(Boolean).filter(entry => {
@@ -397,6 +410,8 @@ function writeLocalSleepLog(userId, log) {
   writeLocal(userId, "sleep", clean);
   writeLegacySleepLog(clean);
 }
+function readLocalDailyNotes(userId) { return normalizeDailyNotes(readLocal(userId, "daily_notes")); }
+function writeLocalDailyNotes(userId, notes) { writeLocal(userId, "daily_notes", normalizeDailyNotes(notes)); }
 function normalizeReminder(reminder = {}) {
   return {
     id: String(reminder.id || uid()),
@@ -452,6 +467,12 @@ function habitRows(grid,days,habits) { return habits.map(h=>{const eligible=days
 function currentStreak(grid,habits) { const today=dayforgeDate(); let streak=0; for(let i=0;i<365;i++){const d=new Date(today);d.setDate(d.getDate()-i); const k=toDateKey(d),c=grid[k]||{}; const dayHabits=habitsForDate(habits,d); const done=dayHabits.filter(h=>c[h.id]).length; if(done>0)streak++;else break;} return streak; }
 function longestStreak(grid,habits) { const today=dayforgeDate(); let best=0,run=0; for(let i=365;i>=0;i--){const d=new Date(today);d.setDate(d.getDate()-i); const k=toDateKey(d),c=grid[k]||{}; const dayHabits=habitsForDate(habits,d); if(dayHabits.filter(h=>c[h.id]).length>0){run++;best=Math.max(best,run)}else{run=0}} return best; }
 function focusScore(grid,days,habits) { if(!habits.length)return 0; const ms=buildMonthStats(grid,days,habits); const cs=Math.min(currentStreak(grid,habits)*3,30); return Math.min(100,Math.round(ms.pct*0.7+cs)); }
+function recentNoteEntries(notes = {}) {
+  return Object.entries(normalizeDailyNotes(notes))
+    .sort(([a], [b]) => b.localeCompare(a))
+    .slice(0, 7)
+    .map(([dateKey, text]) => ({ dateKey, text }));
+}
 
 function App() {
   const authHeaderCache = useRef({});
@@ -489,6 +510,8 @@ function App() {
   const [temptations, setTemptations] = useState(() => readLegacyTemptations().map(normalizeTemptation).filter(Boolean));
   const [temptDraft, setTemptDraft] = useState("");
   const [sleepLog, setSleepLog] = useState(() => normalizeSleepLog(readLegacySleepLog()));
+  const [dailyNotes, setDailyNotes] = useState({});
+  const [noteDraft, setNoteDraft] = useState("");
 
   const days = useMemo(() => monthDays(monthDate), [monthDate]);
   const monthId = monthKey(monthDate);
@@ -547,6 +570,7 @@ function App() {
     const localTemptations = ((localWorkspace.temptations || []).length ? localWorkspace.temptations : readLegacyTemptations()).map(normalizeTemptation).filter(Boolean);
     const localPreferences = normalizePreferences(localWorkspace.preferences || {});
     const localSleep = readLocalSleepLog(user.uid);
+    const localNotes = readLocalDailyNotes(user.uid);
     const localPrivacy = newestPrivacySettings(localWorkspace.privacySettings || {}, readPrivacySettings(user.uid));
     const privacyEnabled = privacyIsEnabled(localPrivacy);
     setWorkspaceReady(hasPrimaryWorkspaceData(localWorkspace) || hasPrimaryWorkspaceData(pendingWorkspace));
@@ -564,6 +588,8 @@ function App() {
     writeLegacyTemptations(localTemptations);
     setSleepLog(localSleep);
     writeLocalSleepLog(user.uid, localSleep);
+    setDailyNotes(localNotes);
+    writeLocalDailyNotes(user.uid, localNotes);
     if (localWorkspace.preferences?.theme) setTheme(localPreferences.theme);
     setHabits(localHabits);
     setGrid(readLocal(user.uid, monthId));
@@ -574,6 +600,8 @@ function App() {
   useEffect(() => { if (!user) return; writeLocal(user.uid, monthId, grid); }, [grid, monthId, user]);
   useEffect(() => { if (!user) return; writeLocal(user.uid, `${monthId}_extras`, dailyExtras); }, [dailyExtras, monthId, user]);
   useEffect(() => { if (!user) return; writeLocalSleepLog(user.uid, sleepLog); }, [sleepLog, user]);
+  useEffect(() => { if (!user) return; writeLocalDailyNotes(user.uid, dailyNotes); }, [dailyNotes, user]);
+  useEffect(() => { setNoteDraft(dailyNotes[selectedDate] || ""); }, [selectedDate, dailyNotes]);
   useEffect(() => {
     const timer = window.setInterval(() => {
       const nextKey = dayforgeTodayKey();
@@ -830,16 +858,19 @@ function App() {
       const ng = {};
       const nextExtras = {};
       const nextSleepLog = {};
+      const nextNotes = {};
       const habitIds = new Set(syncedHabits.map(h => h.id));
       const localGrid = readLocal(user.uid, monthId);
       const localExtras = readLocal(user.uid, `${monthId}_extras`);
       const localSleep = readLocalSleepLog(user.uid);
+      const localNotes = readLocalDailyNotes(user.uid);
       const currentPendingDays = readPendingSync(user.uid).days;
       const daysToUpload = [];
       const candidateDateKeys = new Set([
         ...days.map(toDateKey),
         ...Object.keys(p.days || {}),
         ...Object.keys(localSleep),
+        ...Object.keys(localNotes),
         ...Object.keys(currentPendingDays),
       ]);
       Array.from(candidateDateKeys).sort().forEach(k => {
@@ -849,9 +880,11 @@ function App() {
           ng[k] = pendingDay.habitChecks || localGrid[k] || {};
           const extras = extrasFromDay(pendingDay, habitIds);
           const sleepEntries = (pendingDay.sleepEntries || localSleep[k] || []).map(normalizeSleepEntry).filter(Boolean);
+          const note = normalizeDailyNote(pendingDay.reflection || localNotes[k]);
           if (extras.length) nextExtras[k] = extras;
           else if ((localExtras[k] || []).length) nextExtras[k] = (localExtras[k] || []).map(normalizeExtraItem).filter(Boolean);
           if (sleepEntries.length) nextSleepLog[k] = sleepEntries;
+          if (note) nextNotes[k] = note;
           return;
         }
         if (remoteDay) {
@@ -860,31 +893,40 @@ function App() {
           const remoteSleepEntries = (remoteDay.sleepEntries || []).map(normalizeSleepEntry).filter(Boolean);
           const localSleepEntries = (localSleep[k] || []).map(normalizeSleepEntry).filter(Boolean);
           const sleepEntries = mergeSleepEntries(remoteSleepEntries, localSleepEntries);
+          const remoteNote = normalizeDailyNote(remoteDay.reflection);
+          const localNote = normalizeDailyNote(localNotes[k]);
+          const note = remoteNote || localNote;
           if (extras.length) nextExtras[k] = extras;
           if (sleepEntries.length) nextSleepLog[k] = sleepEntries;
-          if (sleepEntries.length > remoteSleepEntries.length) {
-            daysToUpload.push({ dateKey: k, checks: ng[k], extras, sleepEntries });
+          if (note) nextNotes[k] = note;
+          if (sleepEntries.length > remoteSleepEntries.length || (!remoteNote && localNote)) {
+            daysToUpload.push({ dateKey: k, checks: ng[k], extras, sleepEntries, note });
           }
           return;
         }
         const checks = localGrid[k] || {};
         const extras = (localExtras[k] || []).map(normalizeExtraItem).filter(Boolean);
         const sleepEntries = (localSleep[k] || []).map(normalizeSleepEntry).filter(Boolean);
+        const note = normalizeDailyNote(localNotes[k]);
         ng[k] = checks;
         if (extras.length) nextExtras[k] = extras;
         if (sleepEntries.length) nextSleepLog[k] = sleepEntries;
-        if (Object.keys(checks).length || extras.length || sleepEntries.length) {
-          daysToUpload.push({ dateKey: k, checks, extras, sleepEntries });
+        if (note) nextNotes[k] = note;
+        if (Object.keys(checks).length || extras.length || sleepEntries.length || note) {
+          daysToUpload.push({ dateKey: k, checks, extras, sleepEntries, note });
         }
       });
       setGrid(ng);
       setDailyExtras(nextExtras);
       setSleepLog(nextSleepLog);
+      setDailyNotes(nextNotes);
       writeLocalSleepLog(user.uid, nextSleepLog);
-      daysToUpload.forEach(({ dateKey, checks, extras, sleepEntries }) => {
+      writeLocalDailyNotes(user.uid, nextNotes);
+      daysToUpload.forEach(({ dateKey, checks, extras, sleepEntries, note }) => {
         const extrasByDay = { ...localExtras, [dateKey]: extras };
         const sleepByDay = { ...localSleep, [dateKey]: sleepEntries };
-        const day = buildDayPayload(dateKey, checks, extrasByDay, syncedHabits, sleepByDay);
+        const notesByDay = { ...localNotes, [dateKey]: note };
+        const day = buildDayPayload(dateKey, checks, extrasByDay, syncedHabits, sleepByDay, notesByDay);
         const queued = queuePendingDay(user.uid, dateKey, day);
         putJson(`/api/days/${dateKey}`, { day: queued.day })
           .then(async dayResponse => {
@@ -935,12 +977,13 @@ function App() {
     ];
   }
 
-  function buildDayPayload(dk, checks, extrasByDay = dailyExtras, sourceHabits = trackedHabits, sleepByDay = sleepLog) {
+  function buildDayPayload(dk, checks, extrasByDay = dailyExtras, sourceHabits = trackedHabits, sleepByDay = sleepLog, notesByDay = dailyNotes) {
     const dayHabits = habitsForDayKey(dk, sourceHabits);
     const done = dayHabits.filter(h => checks[h.id]).length;
     const status = done === dayHabits.length && dayHabits.length ? "won" : done > 0 ? "neutral" : "missed";
     const sleepEntries = (sleepByDay[dk] || []).map(normalizeSleepEntry).filter(Boolean);
-    return { dateKey: dk, status, focusLine: quote, habitChecks: checks, tasks: tasksForDay(dk, checks, extrasByDay, sourceHabits), sleepEntries };
+    const reflection = normalizeDailyNote(notesByDay[dk]);
+    return { dateKey: dk, status, focusLine: quote, habitChecks: checks, tasks: tasksForDay(dk, checks, extrasByDay, sourceHabits), sleepEntries, reflection };
   }
 
   function canEditDay(dk) {
@@ -952,13 +995,19 @@ function App() {
     setSyncState(dk < today ? `History locked: ${dk}` : `Only today is editable: ${dk}`);
   }
 
-  async function pushDay(dk, checks, extrasByDay = dailyExtras, sleepByDay = sleepLog) {
+  function requestHabitUnlock() {
+    if (!privacySettings.enabled || !privacySettings.pinHash) return;
+    setPrivacyOpen(true);
+    setPrivacyMessage("Unlock to view or tick habits");
+  }
+
+  async function pushDay(dk, checks, extrasByDay = dailyExtras, sleepByDay = sleepLog, notesByDay = dailyNotes) {
     if (!user) return;
     if (!canEditDay(dk)) {
       showDayLocked(dk);
       return;
     }
-    const day = buildDayPayload(dk, checks, extrasByDay, trackedHabits, sleepByDay);
+    const day = buildDayPayload(dk, checks, extrasByDay, trackedHabits, sleepByDay, notesByDay);
     const queued = queuePendingDay(user.uid, dk, day);
     try {
       const r = await putJson(`/api/days/${dk}`, { day: queued.day });
@@ -969,6 +1018,11 @@ function App() {
   }
 
   function toggleHabit(dk, hid) {
+    if (privacySettings.enabled && !privacyUnlocked) {
+      setSelectedDate(dk);
+      requestHabitUnlock();
+      return;
+    }
     if (!canEditDay(dk)) {
       setSelectedDate(dk);
       showDayLocked(dk);
@@ -1026,9 +1080,29 @@ function App() {
   }
 
   function deleteHabit(hid) {
+    if (privacySettings.enabled && !privacyUnlocked) {
+      requestHabitUnlock();
+      return;
+    }
     const deletedAt = new Date().toISOString();
     const nh = habits.map(h => h.id === hid ? { ...h, active: false, deletedAt } : h);
     setHabits(nh); saveWorkspace(nh);
+  }
+
+  function saveDailyNote(e) {
+    e.preventDefault();
+    if (!canEditDay(selectedDate)) {
+      showDayLocked(selectedDate);
+      return;
+    }
+    const note = normalizeDailyNote(noteDraft);
+    const nextNotes = { ...dailyNotes };
+    if (note) nextNotes[selectedDate] = note;
+    else delete nextNotes[selectedDate];
+    setDailyNotes(nextNotes);
+    if (user) writeLocalDailyNotes(user.uid, nextNotes);
+    pushDay(selectedDate, grid[selectedDate] || {}, dailyExtras, sleepLog, nextNotes);
+    setSyncState(note ? "Daily note saved" : "Daily note cleared");
   }
 
   async function addReminder(e) {
@@ -1331,22 +1405,6 @@ function App() {
     );
   }
 
-  if (privacyEnabled && !privacyUnlocked) {
-    return (
-      <PrivacyGate
-        displayName={displayName}
-        initials={initials}
-        pin={privacyUnlockPin}
-        setPin={setPrivacyUnlockPin}
-        message={privacyMessage}
-        onUnlock={unlockPrivacy}
-        onSignOut={handleAuth}
-        theme={theme}
-        setTheme={setTheme}
-      />
-    );
-  }
-
   const ms = buildMonthStats(grid, days, trackedHabits);
   const ws = buildWeeklyStats(grid, days, trackedHabits);
   const todayKey = dayforgeTodayKey();
@@ -1356,9 +1414,10 @@ function App() {
   const fs = focusScore(grid, days, trackedHabits);
   const rows = habitRows(grid, days, activeHabits);
   const monthHabits = trackedHabits.filter(h => days.some(d => habitsForDate([h], d).length));
+  const privacyLockActive = privacyEnabled && !privacyUnlocked;
 
   return (
-    <main className="forge-screen">
+    <main className={`forge-screen ${privacyLockActive ? "habit-privacy-active" : ""}`}>
       {/* LEFT SIDEBAR */}
       <section className="left-panel">
         <div className="brand-block">
@@ -1397,11 +1456,14 @@ function App() {
           <img src={heroImg} alt="" onError={handleImageError} />
           <figcaption>&ldquo; {quote} &rdquo;</figcaption>
         </figure>
-        <div className="habit-list-card">
+        <div className={`habit-list-card ${privacyLockActive ? "privacy-locked" : ""}`}>
           <h2>Daily Habits</h2>
           <ol>
             {activeHabits.map(h => (
-              <li key={h.id}><span>{h.title}</span><button type="button" onClick={() => deleteHabit(h.id)} aria-label={`Delete ${h.title}`}>&times;</button></li>
+              <li key={h.id}>
+                <span className={privacyLockActive ? "privacy-blurred-text" : ""}>{privacyLockActive ? "Locked habit" : h.title}</span>
+                <button type="button" onClick={() => deleteHabit(h.id)} aria-label={`Delete ${h.title}`}>&times;</button>
+              </li>
             ))}
           </ol>
         </div>
@@ -1420,10 +1482,14 @@ function App() {
         <PrivacyModal onClose={() => setPrivacyOpen(false)}>
           <PrivacyPanel
             enabled={privacyEnabled}
+            unlocked={privacyUnlocked}
             pin={privacyPin}
             setPin={setPrivacyPin}
+            unlockPin={privacyUnlockPin}
+            setUnlockPin={setPrivacyUnlockPin}
             message={privacyMessage}
             onSave={enablePrivacyLock}
+            onUnlock={unlockPrivacy}
             onDisable={disablePrivacyLock}
             onLock={lockDashboard}
           />
@@ -1449,6 +1515,14 @@ function App() {
           onAddExtra={addExtraItem}
           onToggleExtra={toggleExtraItem}
           onDeleteExtra={deleteExtraItem}
+          sleepEntries={sleepLog[selectedDate] || []}
+          noteDraft={noteDraft}
+          setNoteDraft={setNoteDraft}
+          dailyNote={dailyNotes[selectedDate] || ""}
+          recentNotes={recentNoteEntries(dailyNotes)}
+          onSaveNote={saveDailyNote}
+          privacyLocked={privacyLockActive}
+          onRequestUnlock={requestHabitUnlock}
         />
         <WeeklySection weeks={ws} />
       </section>
@@ -1469,7 +1543,8 @@ function App() {
           />
         </div>
         <ReminderCard reminders={reminders} draft={reminderDraft} setDraft={setReminderDraft} onAdd={addReminder} onDelete={deleteReminder} status={reminderState} />
-        <TopHabitsCard rows={rows} />
+        <TopHabitsCard rows={rows} privacyLocked={privacyLockActive} />
+        <DailyNotesCard notes={recentNoteEntries(dailyNotes)} />
         <ResistCard
           temptations={temptations}
           draft={temptDraft}
@@ -1490,7 +1565,7 @@ function App() {
             saveTemptationList(next);
           }}
         />
-        <DailyProgressCard rows={rows} daysCount={days.length} />
+        <DailyProgressCard rows={rows} daysCount={days.length} privacyLocked={privacyLockActive} />
         <div className="quote-strip">{pick(BOTTOM_QUOTES)}</div>
       </section>
     </main>
@@ -1550,16 +1625,32 @@ function PrivacyModal({ children, onClose }) {
   );
 }
 
-function PrivacyPanel({ enabled, pin, setPin, message, onSave, onDisable, onLock }) {
+function PrivacyPanel({ enabled, unlocked, pin, setPin, unlockPin, setUnlockPin, message, onSave, onUnlock, onDisable, onLock }) {
   return (
     <div className={`privacy-panel ${enabled ? "enabled" : ""}`}>
       <div className="privacy-panel-head">
         <div>
           <span>Privacy Lock</span>
-          <strong>{enabled ? "PIN on" : "Optional"}</strong>
+          <strong>{enabled ? (unlocked ? "Habits visible" : "Habits blurred") : "Optional"}</strong>
         </div>
-        {enabled && <button type="button" onClick={onLock}>Lock</button>}
+        {enabled && unlocked && <button type="button" onClick={onLock}>Lock habits</button>}
       </div>
+      {enabled && !unlocked && (
+        <form className="privacy-pin-form" onSubmit={onUnlock}>
+          <input
+            value={unlockPin}
+            onChange={e => setUnlockPin(pinDigits(e.target.value))}
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={4}
+            type="password"
+            placeholder="Unlock PIN"
+            aria-label="Unlock habits with 4 digit PIN"
+            autoFocus
+          />
+          <button type="submit">Unlock</button>
+        </form>
+      )}
       <form className="privacy-pin-form" onSubmit={onSave}>
         <input
           value={pin}
@@ -1574,7 +1665,7 @@ function PrivacyPanel({ enabled, pin, setPin, message, onSave, onDisable, onLock
         <button type="submit">{enabled ? "Change" : "Turn on"}</button>
       </form>
       <div className="privacy-panel-foot">
-        <span>{message || (enabled ? "Dashboard asks PIN on open" : "Off by default")}</span>
+        <span>{message || (enabled ? "Dashboard stays open; habits require PIN" : "Off by default")}</span>
         {enabled && <button type="button" onClick={onDisable}>Turn off</button>}
       </div>
     </div>
@@ -1617,7 +1708,7 @@ function ProgressBar({ pct, done, total, daysCount }) {
   );
 }
 
-function Heatmap({ days, grid, habits, todayKey, selectedDate, onSelect, onToggle, monthDate, extras, extraDraft, setExtraDraft, onAddExtra, onToggleExtra, onDeleteExtra }) {
+function Heatmap({ days, grid, habits, todayKey, selectedDate, onSelect, onToggle, monthDate, extras, extraDraft, setExtraDraft, onAddExtra, onToggleExtra, onDeleteExtra, sleepEntries, noteDraft, setNoteDraft, dailyNote, recentNotes, onSaveNote, privacyLocked, onRequestUnlock }) {
   const selectedChecks = grid[selectedDate] || {};
   const selectedHabits = habitsForDate(habits, selectedDate);
   const selectedStats = dayStats(selectedChecks, selectedHabits);
@@ -1635,18 +1726,19 @@ function Heatmap({ days, grid, habits, todayKey, selectedDate, onSelect, onToggl
         })}
         {habits.map(h => (
           <React.Fragment key={h.id}>
-            <div className="day-label habit-label" title={h.title}>{h.title.length > 8 ? h.title.slice(0,8) + ".." : h.title}</div>
+            <div className={`day-label habit-label ${privacyLocked ? "privacy-blurred-text" : ""}`} title={privacyLocked ? "Locked habit" : h.title}>{privacyLocked ? "Locked" : h.title.length > 8 ? h.title.slice(0,8) + ".." : h.title}</div>
             {days.map(d => {
               const k = toDateKey(d);
               const checked = Boolean((grid[k] || {})[h.id]);
               const available = habitsForDate([h], k).length > 0;
               const editable = k === todayKey && available && h.active;
+              const hidden = privacyLocked && available;
               return (
                 <button key={k}
-                  className={`heatmap-cell ${checked ? "habit-done" : "habit-miss"} ${editable ? "today" : "locked"} ${available ? "" : "dormant"} ${k === selectedDate ? "selected" : ""}`}
-                  onClick={() => editable ? onToggle(k, h.id) : onSelect(k)}
-                  title={`${h.title} - ${k}: ${available ? (checked ? "Done" : "Not done") : "Not active"}${editable ? "" : " (view only)"}`}
-                  aria-label={`${h.title} ${k} ${editable ? "editable today" : "view only"}`}
+                  className={`heatmap-cell ${hidden ? "privacy-hidden" : checked ? "habit-done" : "habit-miss"} ${editable && !privacyLocked ? "today" : "locked"} ${available ? "" : "dormant"} ${k === selectedDate ? "selected" : ""}`}
+                  onClick={() => privacyLocked && editable ? onRequestUnlock() : editable ? onToggle(k, h.id) : onSelect(k)}
+                  title={privacyLocked && available ? "Locked habit" : `${h.title} - ${k}: ${available ? (checked ? "Done" : "Not done") : "Not active"}${editable ? "" : " (view only)"}`}
+                  aria-label={`${privacyLocked && available ? "Locked habit" : h.title} ${k} ${editable && !privacyLocked ? "editable today" : "view only"}`}
                 />
               );
             })}
@@ -1662,9 +1754,9 @@ function Heatmap({ days, grid, habits, todayKey, selectedDate, onSelect, onToggl
           const lv = pct === 0 ? 0 : pct <= 0.25 ? 1 : pct <= 0.5 ? 2 : pct <= 0.75 ? 3 : pct < 1 ? 4 : 5;
           return (
             <button key={k}
-              className={`heatmap-cell lv${lv} ${k === todayKey ? "today" : ""} ${k === selectedDate ? "selected" : ""}`}
+              className={`heatmap-cell ${privacyLocked ? "privacy-hidden" : `lv${lv}`} ${k === todayKey ? "today" : ""} ${k === selectedDate ? "selected" : ""}`}
               onClick={() => onSelect(k)}
-              title={`${k}: ${done}/${dayHabits.length}`}
+              title={privacyLocked ? `${k}: habits locked` : `${k}: ${done}/${dayHabits.length}`}
             />
           );
         })}
@@ -1680,21 +1772,43 @@ function Heatmap({ days, grid, habits, todayKey, selectedDate, onSelect, onToggl
             <span>{selectedDate}</span>
             <em>{lockLabel}</em>
           </div>
-          <strong>{selectedStats.done}/{selectedStats.total} habits</strong>
+          <strong>{privacyLocked ? "--/-- habits" : `${selectedStats.done}/${selectedStats.total} habits`}</strong>
         </div>
         <div className="selected-day-checks">
           {selectedHabits.map(h => {
             const checked = Boolean(selectedChecks[h.id]);
-            const habitEditable = selectedEditable && h.active;
+            const habitEditable = selectedEditable && h.active && !privacyLocked;
             return (
-              <label className={`selected-day-check ${checked ? "done" : ""} ${habitEditable ? "" : "locked"}`} key={h.id}>
-                <input type="checkbox" checked={checked} disabled={!habitEditable} onChange={() => onToggle(selectedDate, h.id)} />
-                <span>{h.title}</span>
+              <label
+                className={`selected-day-check ${!privacyLocked && checked ? "done" : ""} ${habitEditable ? "" : "locked"} ${privacyLocked ? "privacy-check" : ""}`}
+                key={h.id}
+                onClick={event => {
+                  if (privacyLocked && selectedEditable && h.active) {
+                    event.preventDefault();
+                    onRequestUnlock();
+                  }
+                }}
+              >
+                <input type="checkbox" checked={!privacyLocked && checked} disabled={!habitEditable} onChange={() => onToggle(selectedDate, h.id)} />
+                <span className={privacyLocked ? "privacy-blurred-text" : ""}>{privacyLocked ? "Locked habit" : h.title}</span>
               </label>
             );
           })}
           {selectedHabits.length === 0 && <div className="selected-day-empty">No habits were active on this day.</div>}
         </div>
+        {privacyLocked && selectedEditable && (
+          <button type="button" className="inline-unlock-button" onClick={onRequestUnlock}>Unlock habits</button>
+        )}
+        <SleepDaySummary entries={sleepEntries} />
+        <DailyNoteEditor
+          selectedDate={selectedDate}
+          selectedEditable={selectedEditable}
+          noteDraft={noteDraft}
+          setNoteDraft={setNoteDraft}
+          dailyNote={dailyNote}
+          recentNotes={recentNotes}
+          onSave={onSaveNote}
+        />
         <div className={`today-extra-panel ${selectedEditable ? "" : "locked"}`}>
           <div className="today-extra-head">
             <span>Today Only</span>
@@ -1724,6 +1838,66 @@ function Heatmap({ days, grid, habits, todayKey, selectedDate, onSelect, onToggl
 
 /* monthDate passed via closure in App */
 
+function sleepDurationStr(sleepISO, wakeISO) {
+  const ms = new Date(wakeISO) - new Date(sleepISO);
+  if (!Number.isFinite(ms) || ms < 0) return "";
+  const hrs = Math.floor(ms / 3600000);
+  const mins = Math.floor((ms % 3600000) / 60000);
+  return `${hrs}h ${mins}m`;
+}
+
+function SleepDaySummary({ entries = [] }) {
+  return (
+    <div className="selected-sleep-panel">
+      <div className="today-extra-head">
+        <span>Sleep Time</span>
+        <strong>{entries.length ? `${entries.length} log${entries.length === 1 ? "" : "s"}` : "No sleep log"}</strong>
+      </div>
+      <div className="selected-sleep-list">
+        {entries.length === 0 && <div className="today-extra-empty">No sleep time saved for this day.</div>}
+        {entries.map((entry, index) => (
+          <div className={`selected-sleep-item ${entry.woke ? "complete" : "active"}`} key={`${entry.time}-${index}`}>
+            <span>Sleep {entry.display || "--"}</span>
+            <span>{entry.woke ? `Wake ${entry.wokeDisplay || "--"}` : "Sleeping"}</span>
+            {entry.woke && <strong>{sleepDurationStr(entry.time, entry.woke)}</strong>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DailyNoteEditor({ selectedDate, selectedEditable, noteDraft, setNoteDraft, dailyNote, recentNotes, onSave }) {
+  return (
+    <div className={`daily-note-panel ${selectedEditable ? "" : "locked"}`}>
+      <div className="today-extra-head">
+        <span>Done Today</span>
+        <strong>{selectedEditable ? "Saved with this day" : dailyNote ? "Saved note" : "View only"}</strong>
+      </div>
+      <form className="daily-note-form" onSubmit={onSave}>
+        <textarea
+          value={noteDraft}
+          disabled={!selectedEditable}
+          onChange={event => setNoteDraft(event.target.value)}
+          placeholder={selectedEditable ? "What did you complete today?" : "Only today can be edited"}
+          maxLength={700}
+          rows={4}
+        />
+        <button type="submit" disabled={!selectedEditable}>Save note</button>
+      </form>
+      <div className="daily-note-recent">
+        {recentNotes.length === 0 && <div className="today-extra-empty">No saved notes yet.</div>}
+        {recentNotes.map(item => (
+          <div className="daily-note-recent-item" key={item.dateKey}>
+            <strong>{item.dateKey}</strong>
+            <p>{item.text}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function WeeklySection({ weeks }) {
   return (
     <div className="weekly-card">
@@ -1741,7 +1915,7 @@ function WeeklySection({ weeks }) {
   );
 }
 
-function SleepCard({ log, todayKey, onSleep, onWake, className = "" }) {
+function LegacySleepCard({ log, todayKey, onSleep, onWake, className = "" }) {
   const todayEntries = log[todayKey] || [];
   const lastEntry = todayEntries[todayEntries.length - 1];
   const isSleeping = lastEntry && !lastEntry.woke;
@@ -1807,20 +1981,78 @@ function SleepCard({ log, todayKey, onSleep, onWake, className = "" }) {
   );
 }
 
-function TopHabitsCard({ rows }) {
+function SleepCard({ log, todayKey, onSleep, onWake, className = "" }) {
+  const todayEntries = log[todayKey] || [];
+  const lastEntry = todayEntries[todayEntries.length - 1];
+  const isSleeping = lastEntry && !lastEntry.woke;
+  const recentDays = Object.keys(log).sort().reverse().slice(0, 5);
+
+  return (
+    <div className={`sleep-card ${className}`}>
+      <div className="sleep-header">
+        <span className="sleep-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+          Sleep Tracker
+        </span>
+        <span className="sleep-count">{todayEntries.length} log{todayEntries.length !== 1 ? "s" : ""} today</span>
+      </div>
+      <div className="sleep-actions">
+        {!isSleeping ? (
+          <button className="sleep-btn" onClick={onSleep}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+            Going to sleep?
+          </button>
+        ) : (
+          <button className="wake-btn" onClick={onWake}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+            I'm awake!
+          </button>
+        )}
+      </div>
+      {todayEntries.length > 0 && (
+        <div className="sleep-entries">
+          {todayEntries.map((entry, i) => (
+            <div key={i} className={`sleep-entry ${entry.woke ? "complete" : "active"}`}>
+              <span className="sleep-time">Sleep {entry.display}</span>
+              {entry.woke && <span className="wake-time">Wake {entry.wokeDisplay}</span>}
+              {entry.woke && <span className="sleep-duration">{sleepDurationStr(entry.time, entry.woke)}</span>}
+              {!entry.woke && <span className="sleep-active">Sleeping</span>}
+            </div>
+          ))}
+        </div>
+      )}
+      {recentDays.length > 1 && (
+        <div className="sleep-history">
+          {recentDays.slice(1, 4).map(day => {
+            const entries = log[day] || [];
+            const lastComplete = [...entries].reverse().find(e => e.woke);
+            return (
+              <div key={day} className="sleep-history-item">
+                <span>{day}</span>
+                <span>{lastComplete ? `${lastComplete.display} to ${lastComplete.wokeDisplay} (${sleepDurationStr(lastComplete.time, lastComplete.woke)})` : entries.length ? `${entries[0].display}` : "-"}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TopHabitsCard({ rows, privacyLocked }) {
   const top = rows.slice(0, 5);
   return (
     <div className="top-habits-card">
       <div className="card-header"><h3>Top Habits</h3><span className="view-all">View All</span></div>
       <div className="top-habits-list">
         {top.map((r, i) => (
-          <div className="top-habit-row" key={r.id}>
+          <div className={`top-habit-row ${privacyLocked ? "privacy-row" : ""}`} key={r.id}>
             <div className="rank">{i + 1}</div>
             <div>
-              <div className="top-habit-name">{r.title}</div>
-              <div className="top-habit-bar"><div className="top-habit-fill" style={{ width: `${r.pct}%` }} /></div>
+              <div className={`top-habit-name ${privacyLocked ? "privacy-blurred-text" : ""}`}>{privacyLocked ? "Locked habit" : r.title}</div>
+              <div className="top-habit-bar"><div className="top-habit-fill" style={{ width: privacyLocked ? "55%" : `${r.pct}%` }} /></div>
             </div>
-            <div className="top-habit-pct">{r.pct}%</div>
+            <div className={`top-habit-pct ${privacyLocked ? "privacy-blurred-text" : ""}`}>{privacyLocked ? "--" : `${r.pct}%`}</div>
           </div>
         ))}
       </div>
@@ -1828,7 +2060,24 @@ function TopHabitsCard({ rows }) {
   );
 }
 
-function DailyProgressCard({ rows, daysCount }) {
+function DailyNotesCard({ notes }) {
+  return (
+    <div className="daily-notes-card">
+      <div className="card-header"><h3>Recent Notes</h3><span className="view-all">7 days</span></div>
+      <div className="daily-notes-list">
+        {notes.length === 0 && <div className="daily-notes-empty">No daily notes saved yet.</div>}
+        {notes.map(item => (
+          <div className="daily-notes-row" key={item.dateKey}>
+            <strong>{item.dateKey}</strong>
+            <p>{item.text}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DailyProgressCard({ rows, daysCount, privacyLocked }) {
   return (
     <div className="daily-progress-card">
       <div className="card-header"><h3>Daily Metrics</h3></div>
@@ -1837,11 +2086,11 @@ function DailyProgressCard({ rows, daysCount }) {
           <thead><tr><th>Habit</th><th>Goal</th><th>Progress</th><th>Streak</th></tr></thead>
           <tbody>
             {rows.map(r => (
-              <tr key={r.id}>
-                <td>{r.title}</td>
+              <tr key={r.id} className={privacyLocked ? "privacy-row" : ""}>
+                <td className={privacyLocked ? "privacy-blurred-text" : ""}>{privacyLocked ? "Locked habit" : r.title}</td>
                 <td>{r.targetPerWeek}/wk</td>
-                <td><span className="mini-bar"><i style={{width:`${r.pct}%`}} /></span> {r.pct}%</td>
-                <td className="streak">{r.streak}</td>
+                <td><span className="mini-bar"><i style={{width: privacyLocked ? "55%" : `${r.pct}%`}} /></span> {privacyLocked ? "--" : `${r.pct}%`}</td>
+                <td className="streak">{privacyLocked ? "--" : r.streak}</td>
               </tr>
             ))}
           </tbody>

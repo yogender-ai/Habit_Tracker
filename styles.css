@@ -523,6 +523,10 @@ input:focus,select:focus{border-color:var(--purple)}
 .heatmap-cell:hover{transform:scale(1.3);z-index:5;border-color:var(--purple);box-shadow:0 0 8px var(--purple-glow)}
 .heatmap-cell.locked{cursor:default;opacity:.72}
 .heatmap-cell.locked:hover{transform:scale(1.06);border-color:rgba(167,139,250,0.18);box-shadow:none}
+.heatmap-cell.privacy-hidden{
+  background:linear-gradient(135deg,rgba(148,163,184,.22),rgba(167,139,250,.14));
+  border-color:rgba(255,255,255,.06);filter:blur(2px);opacity:.78;
+}
 .heatmap-cell.dormant{opacity:.2;background:rgba(255,255,255,0.015)}
 .heatmap-cell.habit-done{background:rgba(52,211,153,0.38);border-color:rgba(52,211,153,0.2);box-shadow:inset 0 0 4px rgba(52,211,153,0.15)}
 .heatmap-cell.habit-miss{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.04)}
@@ -554,6 +558,14 @@ input:focus,select:focus{border-color:var(--purple)}
 .selected-day-check.done{border-color:rgba(86,211,157,0.5);background:rgba(86,211,157,0.12);color:var(--ink)}
 .selected-day-check.locked{cursor:default;opacity:.72}
 .selected-day-check.locked input{cursor:not-allowed}
+.selected-day-check.privacy-check{cursor:pointer}
+.privacy-blurred-text{filter:blur(4px);user-select:none}
+.inline-unlock-button{
+  width:100%;min-height:34px;margin-top:8px;border-radius:9px;
+  background:linear-gradient(135deg,var(--indigo),var(--purple));color:#fff;
+  font-size:10px;font-weight:900;letter-spacing:1px;text-transform:uppercase;
+  box-shadow:0 8px 22px var(--purple-glow);
+}
 .selected-day-empty{
   min-height:34px;display:grid;place-items:center;padding:0 10px;border:1px dashed var(--border);
   border-radius:8px;color:var(--dim);font-size:10px;font-weight:800;
@@ -589,6 +601,34 @@ input:focus,select:focus{border-color:var(--purple)}
 .today-extra-item button:hover{background:rgba(248,113,113,.10);color:var(--red)}
 .today-extra-item button:disabled,.today-extra-item input:disabled{cursor:not-allowed;opacity:.45}
 .today-extra-item button:disabled:hover{background:transparent;color:var(--dim)}
+.selected-sleep-panel,.daily-note-panel{margin-top:10px;border-top:1px solid var(--border);padding-top:10px;display:grid;gap:8px}
+.selected-sleep-list{display:grid;gap:6px}
+.selected-sleep-item{
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;align-items:center;gap:8px;
+  min-height:32px;padding:0 8px;border:1px solid var(--border);border-radius:9px;
+  background:rgba(255,255,255,.035);font-size:10px;font-weight:800;color:var(--muted);
+}
+.selected-sleep-item.complete{border-left:3px solid var(--mint)}
+.selected-sleep-item.active{border-left:3px solid var(--indigo)}
+.selected-sleep-item span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.selected-sleep-item strong{font-family:'JetBrains Mono',monospace;color:var(--mint);font-size:9px}
+.daily-note-panel.locked{opacity:.82}
+.daily-note-form{display:grid;gap:7px}
+.daily-note-form textarea{
+  width:100%;resize:vertical;min-height:82px;padding:10px;border-radius:9px;border:1px solid var(--border);
+  background:rgba(255,255,255,.045);color:var(--ink);font-size:11px;font-weight:700;line-height:1.45;
+}
+.daily-note-form button{
+  min-height:34px;border-radius:9px;background:linear-gradient(135deg,var(--mint),var(--cyan));
+  color:#04111f;font-size:10px;font-weight:900;
+}
+.daily-note-form textarea:disabled,.daily-note-form button:disabled{cursor:not-allowed;opacity:.58}
+.daily-note-recent{display:grid;gap:6px;max-height:150px;overflow-y:auto}
+.daily-note-recent-item{
+  padding:8px 10px;border:1px solid var(--border);border-radius:9px;background:rgba(255,255,255,.03);
+}
+.daily-note-recent-item strong{display:block;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--purple);margin-bottom:4px}
+.daily-note-recent-item p{font-size:10px;line-height:1.35;color:var(--muted);font-weight:700;white-space:pre-wrap}
 
 /* Weekly Rings */
 .weekly-card{
@@ -659,6 +699,10 @@ input:focus,select:focus{border-color:var(--purple)}
   flex:0 0 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden;
   border:1px solid var(--border);border-radius:14px;background:var(--glass);
 }
+.daily-notes-card{
+  flex:0 0 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden;
+  border:1px solid var(--border);border-radius:14px;background:var(--glass);
+}
 .card-header{
   display:flex;justify-content:space-between;align-items:center;
   padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0;
@@ -688,6 +732,12 @@ input:focus,select:focus{border-color:var(--purple)}
 .top-habit-row:nth-child(n+4) .top-habit-fill{background:linear-gradient(90deg,var(--indigo),var(--cyan))}
 .top-habit-pct{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--muted);text-align:right}
 .top-habits-list,.daily-progress-list{flex:1;min-height:0;overflow-y:auto}
+.daily-notes-list{display:grid;gap:7px;padding:10px 12px;max-height:220px;overflow-y:auto}
+.daily-notes-empty{padding:12px;text-align:center;font-size:10px;color:var(--dim);font-weight:800}
+.daily-notes-row{padding:9px 10px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.03)}
+.daily-notes-row strong{display:block;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--purple);margin-bottom:5px}
+.daily-notes-row p{font-size:10px;line-height:1.35;color:var(--muted);font-weight:700;white-space:pre-wrap}
+.privacy-row .top-habit-fill,.privacy-row .mini-bar i{background:linear-gradient(90deg,rgba(148,163,184,.38),rgba(167,139,250,.28))}
 
 /* Daily Progress Table */
 .dp-table{width:100%;border-collapse:collapse}
@@ -1110,6 +1160,11 @@ body[data-theme="light"] .reminder-form input::-webkit-calendar-picker-indicator
 body[data-theme="light"] .today-extra-form input{background:#fafbfd;border-color:#e2e8f0}
 body[data-theme="light"] .today-extra-item{background:#fafbfd;border-color:#e2e8f0}
 body[data-theme="light"] .today-extra-item.done span{color:#94a3b8}
+body[data-theme="light"] .daily-note-form textarea,
+body[data-theme="light"] .selected-sleep-item,
+body[data-theme="light"] .daily-note-recent-item,
+body[data-theme="light"] .daily-notes-row{background:#fafbfd;border-color:#e2e8f0}
+body[data-theme="light"] .daily-notes-card{background:#fff;border-color:rgba(0,0,0,0.06)}
 body[data-theme="light"] .reminder-priority-toggle{background:#f8fafc;border-color:#e2e8f0}
 body[data-theme="light"] .reminder-priority-toggle button.active{background:rgba(79,70,229,.08);color:#4338ca;box-shadow:inset 0 0 0 1px rgba(79,70,229,.14)}
 body[data-theme="light"] .reminder-priority-toggle button.active.high{background:rgba(217,119,6,.08);color:#b45309;box-shadow:inset 0 0 0 1px rgba(217,119,6,.16)}
