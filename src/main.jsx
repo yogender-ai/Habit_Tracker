@@ -501,6 +501,7 @@ function App() {
   const [privacyMessage, setPrivacyMessage] = useState("");
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [pendingHabitLockId, setPendingHabitLockId] = useState("");
+  const [pendingHabitUnlockId, setPendingHabitUnlockId] = useState("");
   const [heroImg] = useState(() => pick(HERO_IMAGES));
   const [quote] = useState(() => pick(QUOTES));
   const [missionLine] = useState(() => pick(MISSION_LINES));
@@ -1004,6 +1005,7 @@ function App() {
 
   function requestPasscodeSetup(hid = "") {
     setPendingHabitLockId(hid);
+    setPendingHabitUnlockId("");
     setPrivacyOpen(true);
     setPrivacyMessage("Save a 4 digit passcode first");
   }
@@ -1109,10 +1111,20 @@ function App() {
       requestPasscodeSetup(hid);
       return;
     }
+    if (current.locked) {
+      setPendingHabitLockId("");
+      setPendingHabitUnlockId(hid);
+      setPrivacyUnlocked(false);
+      setPrivacyUnlockPin("");
+      setPrivacyOpen(true);
+      setPrivacyMessage("Enter passcode to remove privacy");
+      return;
+    }
     const nh = habits.map(h => h.id === hid ? { ...h, locked: !h.locked } : h);
     setHabits(nh);
+    setPrivacyUnlocked(false);
     saveWorkspace(nh);
-    setSyncState(current.locked ? "Habit privacy removed" : "Habit marked private");
+    setSyncState("Habit marked private");
   }
 
   function saveDailyNote(e) {
@@ -1253,13 +1265,15 @@ function App() {
     const pinHash = await hashPin(pin, salt);
     const settings = { enabled: true, salt, pinHash, updatedAt: new Date().toISOString() };
     applyPrivacySettings(settings);
-    setPrivacyUnlocked(true);
+    setPrivacyUnlocked(!pendingHabitLockId);
     setPrivacyPin("");
     if (pendingHabitLockId) {
       const nh = habits.map(h => h.id === pendingHabitLockId ? { ...h, locked: true } : h);
       setHabits(nh);
       setPendingHabitLockId("");
-      setPrivacyMessage("Passcode saved and habit marked private");
+      setPendingHabitUnlockId("");
+      setPrivacyOpen(false);
+      setPrivacyMessage("Passcode saved. Habit is private now");
       await saveWorkspaceState(
         { privacySettings: settings, habits: nh },
         { saved: "Privacy saved", failed: "Privacy save failed", local: "Privacy saved locally, will sync" }
@@ -1278,6 +1292,7 @@ function App() {
     setPrivacyPin("");
     setPrivacyUnlockPin("");
     setPendingHabitLockId("");
+    setPendingHabitUnlockId("");
     setPrivacyMessage("Privacy lock off");
     await savePrivacySettings(settings);
   }
@@ -1309,6 +1324,15 @@ function App() {
     }
     setPrivacyUnlocked(true);
     setPrivacyUnlockPin("");
+    if (pendingHabitUnlockId) {
+      const nh = habits.map(h => h.id === pendingHabitUnlockId ? { ...h, locked: false } : h);
+      setHabits(nh);
+      setPendingHabitUnlockId("");
+      setPrivacyOpen(false);
+      setPrivacyMessage("Habit privacy removed");
+      await saveWorkspace(nh);
+      return;
+    }
     setPrivacyMessage("Unlocked");
   }
 
