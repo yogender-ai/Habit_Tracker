@@ -368,6 +368,10 @@ input:focus,select:focus{border-color:var(--purple)}
 .privacy-panel-head button:hover{border-color:var(--purple);color:var(--purple)}
 .privacy-panel-foot button:hover{border-color:var(--red);color:var(--red)}
 .privacy-pin-form{display:grid;grid-template-columns:minmax(0,1fr) 70px;gap:6px}
+.privacy-pin-label{
+  grid-column:1 / -1;color:var(--muted);font-size:8px;font-weight:900;
+  letter-spacing:1.7px;text-transform:uppercase;
+}
 .privacy-pin-form input{
   height:30px;padding:0 10px;border-radius:8px;font-size:11px;font-weight:800;
   letter-spacing:1.5px;text-align:center;
@@ -417,13 +421,17 @@ input:focus,select:focus{border-color:var(--purple)}
 }
 .habit-list-card ol{flex:1;min-height:0;margin:0;padding:4px 8px 4px 28px;overflow-y:auto}
 .habit-list-card li{
-  display:grid;grid-template-columns:minmax(0,1fr) 22px;align-items:center;gap:4px;
+  display:grid;grid-template-columns:minmax(0,1fr) 22px 22px;align-items:center;gap:4px;
   min-height:26px;border-bottom:1px solid rgba(255,255,255,0.04);
   font-size:clamp(8px,.65vw,10.5px);font-weight:600;line-height:1.15;
 }
 .habit-list-card li span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .habit-list-card li button{width:20px;height:20px;border:0;background:transparent;color:var(--dim);font-size:13px;border-radius:6px;transition:all .15s}
-.habit-list-card li button:hover{background:rgba(248,113,113,0.1);color:var(--red)}
+.habit-list-card li.private-habit{background:linear-gradient(90deg,rgba(167,139,250,.05),transparent)}
+.habit-lock-button{font-size:12px !important;color:var(--muted) !important}
+.habit-lock-button.active{color:var(--purple) !important;background:rgba(167,139,250,.12) !important}
+.habit-lock-button:hover{background:rgba(167,139,250,0.12) !important;color:var(--purple) !important}
+.habit-delete-button:hover{background:rgba(248,113,113,0.1);color:var(--red)}
 .add-habit{display:grid;grid-template-columns:minmax(0,1fr) 52px;gap:5px;flex-shrink:0}
 .add-habit input{min-height:34px;padding:0 10px;font-size:11px;font-weight:600}
 .add-habit button{
@@ -732,7 +740,21 @@ input:focus,select:focus{border-color:var(--purple)}
 .top-habit-row:nth-child(n+4) .top-habit-fill{background:linear-gradient(90deg,var(--indigo),var(--cyan))}
 .top-habit-pct{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--muted);text-align:right}
 .top-habits-list,.daily-progress-list{flex:1;min-height:0;overflow-y:auto}
-.daily-notes-list{display:grid;gap:7px;padding:10px 12px;max-height:220px;overflow-y:auto}
+.daily-note-card-form{display:grid;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border)}
+.daily-note-card-form textarea{
+  width:100%;min-height:86px;resize:vertical;padding:10px;border-radius:10px;border:1px solid var(--border);
+  background:rgba(255,255,255,.045);color:var(--ink);font-size:11px;font-weight:750;line-height:1.45;
+}
+.daily-note-card-form button{
+  min-height:34px;border-radius:9px;background:linear-gradient(135deg,var(--mint),var(--cyan));
+  color:#04111f;font-size:10px;font-weight:900;
+}
+.daily-note-card-form textarea:disabled,.daily-note-card-form button:disabled{cursor:not-allowed;opacity:.58}
+.daily-notes-subhead{
+  padding:9px 12px 0;color:var(--muted);font-size:8px;font-weight:900;
+  letter-spacing:2px;text-transform:uppercase;
+}
+.daily-notes-list{display:grid;gap:7px;padding:10px 12px;max-height:180px;overflow-y:auto}
 .daily-notes-empty{padding:12px;text-align:center;font-size:10px;color:var(--dim);font-weight:800}
 .daily-notes-row{padding:9px 10px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.03)}
 .daily-notes-row strong{display:block;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--purple);margin-bottom:5px}
@@ -1161,6 +1183,7 @@ body[data-theme="light"] .today-extra-form input{background:#fafbfd;border-color
 body[data-theme="light"] .today-extra-item{background:#fafbfd;border-color:#e2e8f0}
 body[data-theme="light"] .today-extra-item.done span{color:#94a3b8}
 body[data-theme="light"] .daily-note-form textarea,
+body[data-theme="light"] .daily-note-card-form textarea,
 body[data-theme="light"] .selected-sleep-item,
 body[data-theme="light"] .daily-note-recent-item,
 body[data-theme="light"] .daily-notes-row{background:#fafbfd;border-color:#e2e8f0}

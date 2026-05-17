@@ -454,6 +454,7 @@ def normalize_habit(habit):
         "goalId": clean_text(habit.get("goalId"), 80),
         "targetPerWeek": clamp_number(habit.get("targetPerWeek"), 1, 7, 5),
         "active": active,
+        "locked": bool(habit.get("locked") or habit.get("private")),
         "createdAt": clean_text(habit.get("createdAt") or utc_now().isoformat(), 40),
         "deletedAt": clean_text(habit.get("deletedAt") or (habit.get("updatedAt") if not active else ""), 40),
     }

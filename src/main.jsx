@@ -154,7 +154,7 @@ function readLegacySleepLog() { try { return JSON.parse(localStorage.getItem("da
 function writeLegacySleepLog(log) { localStorage.setItem("dayforge_sleep", JSON.stringify(log)); }
 function apiBase() { const c=String(CONFIG.apiBaseUrl||"").trim().replace(/\/$/,""); if(c) return c; if(location.hostname==="127.0.0.1"||location.hostname==="localhost") return "http://127.0.0.1:8000"; return location.origin; }
 function hasFirebaseConfig() { const f=CONFIG.firebase||{}; return Boolean(f.apiKey&&f.authDomain&&f.projectId&&f.appId); }
-function normalizeHabit(h) { return { id:String(h.id||uid()), title:String(h.title||"New habit").slice(0,90), category:String(h.category||"Focus").slice(0,40), targetPerWeek:Math.max(1,Math.min(7,Number(h.targetPerWeek||h.target||5))), active:h.active!==false, createdAt:h.createdAt||"1970-01-01T00:00:00.000Z", deletedAt:h.deletedAt||(h.active===false?(h.updatedAt||new Date().toISOString()):"") }; }
+function normalizeHabit(h) { return { id:String(h.id||uid()), title:String(h.title||"New habit").slice(0,90), category:String(h.category||"Focus").slice(0,40), targetPerWeek:Math.max(1,Math.min(7,Number(h.targetPerWeek||h.target||5))), active:h.active!==false, locked:Boolean(h.locked || h.private), createdAt:h.createdAt||"1970-01-01T00:00:00.000Z", deletedAt:h.deletedAt||(h.active===false?(h.updatedAt||new Date().toISOString()):"") }; }
 function isLegacyDefaultHabit(h) { return LEGACY_DEFAULT_HABIT_IDS.has(String(h.id || "")); }
 function privacyIsEnabled(settings = {}) { return Boolean(settings.enabled && settings.pinHash && settings.salt); }
 function normalizePrivacySettings(settings = {}) {
@@ -500,6 +500,7 @@ function App() {
   const [privacyUnlockPin, setPrivacyUnlockPin] = useState("");
   const [privacyMessage, setPrivacyMessage] = useState("");
   const [privacyOpen, setPrivacyOpen] = useState(false);
+  const [pendingHabitLockId, setPendingHabitLockId] = useState("");
   const [heroImg] = useState(() => pick(HERO_IMAGES));
   const [quote] = useState(() => pick(QUOTES));
   const [missionLine] = useState(() => pick(MISSION_LINES));
@@ -1001,6 +1002,16 @@ function App() {
     setPrivacyMessage("Unlock to view or tick habits");
   }
 
+  function requestPasscodeSetup(hid = "") {
+    setPendingHabitLockId(hid);
+    setPrivacyOpen(true);
+    setPrivacyMessage("Save a 4 digit passcode first");
+  }
+
+  function habitIsHidden(habit) {
+    return Boolean(habit?.locked && privacySettings.enabled && privacySettings.pinHash && !privacyUnlocked);
+  }
+
   async function pushDay(dk, checks, extrasByDay = dailyExtras, sleepByDay = sleepLog, notesByDay = dailyNotes) {
     if (!user) return;
     if (!canEditDay(dk)) {
@@ -1018,7 +1029,8 @@ function App() {
   }
 
   function toggleHabit(dk, hid) {
-    if (privacySettings.enabled && !privacyUnlocked) {
+    const habit = trackedHabits.find(h => h.id === hid);
+    if (habitIsHidden(habit)) {
       setSelectedDate(dk);
       requestHabitUnlock();
       return;
@@ -1080,13 +1092,27 @@ function App() {
   }
 
   function deleteHabit(hid) {
-    if (privacySettings.enabled && !privacyUnlocked) {
+    const habit = trackedHabits.find(h => h.id === hid);
+    if (habitIsHidden(habit)) {
       requestHabitUnlock();
       return;
     }
     const deletedAt = new Date().toISOString();
     const nh = habits.map(h => h.id === hid ? { ...h, active: false, deletedAt } : h);
     setHabits(nh); saveWorkspace(nh);
+  }
+
+  function toggleHabitLock(hid) {
+    const current = trackedHabits.find(h => h.id === hid);
+    if (!current) return;
+    if (!privacySettings.enabled || !privacySettings.pinHash) {
+      requestPasscodeSetup(hid);
+      return;
+    }
+    const nh = habits.map(h => h.id === hid ? { ...h, locked: !h.locked } : h);
+    setHabits(nh);
+    saveWorkspace(nh);
+    setSyncState(current.locked ? "Habit privacy removed" : "Habit marked private");
   }
 
   function saveDailyNote(e) {
@@ -1229,7 +1255,18 @@ function App() {
     applyPrivacySettings(settings);
     setPrivacyUnlocked(true);
     setPrivacyPin("");
-    setPrivacyMessage("Privacy lock on");
+    if (pendingHabitLockId) {
+      const nh = habits.map(h => h.id === pendingHabitLockId ? { ...h, locked: true } : h);
+      setHabits(nh);
+      setPendingHabitLockId("");
+      setPrivacyMessage("Passcode saved and habit marked private");
+      await saveWorkspaceState(
+        { privacySettings: settings, habits: nh },
+        { saved: "Privacy saved", failed: "Privacy save failed", local: "Privacy saved locally, will sync" }
+      );
+      return;
+    }
+    setPrivacyMessage("Passcode saved");
     await savePrivacySettings(settings);
   }
 
@@ -1240,6 +1277,7 @@ function App() {
     setPrivacyUnlocked(true);
     setPrivacyPin("");
     setPrivacyUnlockPin("");
+    setPendingHabitLockId("");
     setPrivacyMessage("Privacy lock off");
     await savePrivacySettings(settings);
   }
@@ -1415,6 +1453,7 @@ function App() {
   const rows = habitRows(grid, days, activeHabits);
   const monthHabits = trackedHabits.filter(h => days.some(d => habitsForDate([h], d).length));
   const privacyLockActive = privacyEnabled && !privacyUnlocked;
+  const privateHabitCount = trackedHabits.filter(h => h.locked).length;
 
   return (
     <main className={`forge-screen ${privacyLockActive ? "habit-privacy-active" : ""}`}>
@@ -1456,15 +1495,21 @@ function App() {
           <img src={heroImg} alt="" onError={handleImageError} />
           <figcaption>&ldquo; {quote} &rdquo;</figcaption>
         </figure>
-        <div className={`habit-list-card ${privacyLockActive ? "privacy-locked" : ""}`}>
+        <div className="habit-list-card">
           <h2>Daily Habits</h2>
           <ol>
-            {activeHabits.map(h => (
-              <li key={h.id}>
-                <span className={privacyLockActive ? "privacy-blurred-text" : ""}>{privacyLockActive ? "Locked habit" : h.title}</span>
-                <button type="button" onClick={() => deleteHabit(h.id)} aria-label={`Delete ${h.title}`}>&times;</button>
+            {activeHabits.map(h => {
+              const hidden = habitIsHidden(h);
+              return (
+              <li className={h.locked ? "private-habit" : ""} key={h.id}>
+                <span className={hidden ? "privacy-blurred-text" : ""}>{hidden ? "Private habit" : h.title}</span>
+                <button className={`habit-lock-button ${h.locked ? "active" : ""}`} type="button" onClick={() => toggleHabitLock(h.id)} title={h.locked ? "Remove habit privacy" : "Make this habit private"} aria-label={h.locked ? `Unlock privacy for ${h.title}` : `Lock ${h.title}`}>
+                  {h.locked ? "●" : "○"}
+                </button>
+                <button className="habit-delete-button" type="button" onClick={() => deleteHabit(h.id)} aria-label={`Delete ${h.title}`}>&times;</button>
               </li>
-            ))}
+              );
+            })}
           </ol>
         </div>
         <form className="add-habit" onSubmit={addHabit}>
@@ -1483,6 +1528,7 @@ function App() {
           <PrivacyPanel
             enabled={privacyEnabled}
             unlocked={privacyUnlocked}
+            privateCount={privateHabitCount}
             pin={privacyPin}
             setPin={setPrivacyPin}
             unlockPin={privacyUnlockPin}
@@ -1544,7 +1590,15 @@ function App() {
         </div>
         <ReminderCard reminders={reminders} draft={reminderDraft} setDraft={setReminderDraft} onAdd={addReminder} onDelete={deleteReminder} status={reminderState} />
         <TopHabitsCard rows={rows} privacyLocked={privacyLockActive} />
-        <DailyNotesCard notes={recentNoteEntries(dailyNotes)} />
+        <DailyNotesCard
+          selectedDate={selectedDate}
+          todayKey={todayKey}
+          noteDraft={noteDraft}
+          setNoteDraft={setNoteDraft}
+          dailyNote={dailyNotes[selectedDate] || ""}
+          notes={recentNoteEntries(dailyNotes)}
+          onSave={saveDailyNote}
+        />
         <ResistCard
           temptations={temptations}
           draft={temptDraft}
@@ -1625,15 +1679,15 @@ function PrivacyModal({ children, onClose }) {
   );
 }
 
-function PrivacyPanel({ enabled, unlocked, pin, setPin, unlockPin, setUnlockPin, message, onSave, onUnlock, onDisable, onLock }) {
+function PrivacyPanel({ enabled, unlocked, privateCount, pin, setPin, unlockPin, setUnlockPin, message, onSave, onUnlock, onDisable, onLock }) {
   return (
     <div className={`privacy-panel ${enabled ? "enabled" : ""}`}>
       <div className="privacy-panel-head">
         <div>
-          <span>Privacy Lock</span>
-          <strong>{enabled ? (unlocked ? "Habits visible" : "Habits blurred") : "Optional"}</strong>
+          <span>Habit Passcode</span>
+          <strong>{enabled ? (unlocked ? `${privateCount} private habit${privateCount === 1 ? "" : "s"} visible` : `${privateCount} private habit${privateCount === 1 ? "" : "s"} blurred`) : "Save pass first"}</strong>
         </div>
-        {enabled && unlocked && <button type="button" onClick={onLock}>Lock habits</button>}
+        {enabled && unlocked && privateCount > 0 && <button type="button" onClick={onLock}>Blur private</button>}
       </div>
       {enabled && !unlocked && (
         <form className="privacy-pin-form" onSubmit={onUnlock}>
@@ -1652,6 +1706,7 @@ function PrivacyPanel({ enabled, unlocked, pin, setPin, unlockPin, setUnlockPin,
         </form>
       )}
       <form className="privacy-pin-form" onSubmit={onSave}>
+        <label className="privacy-pin-label">Save / change passcode</label>
         <input
           value={pin}
           onChange={e => setPin(pinDigits(e.target.value))}
@@ -1662,10 +1717,10 @@ function PrivacyPanel({ enabled, unlocked, pin, setPin, unlockPin, setUnlockPin,
           placeholder="4 digit PIN"
           aria-label="Set 4 digit PIN"
         />
-        <button type="submit">{enabled ? "Change" : "Turn on"}</button>
+        <button type="submit">{enabled ? "Save" : "Save pass"}</button>
       </form>
       <div className="privacy-panel-foot">
-        <span>{message || (enabled ? "Dashboard stays open; habits require PIN" : "Off by default")}</span>
+        <span>{message || (enabled ? "Use the circle beside a habit to make only that habit private" : "Save a passcode, then choose private habits")}</span>
         {enabled && <button type="button" onClick={onDisable}>Turn off</button>}
       </div>
     </div>
@@ -1726,19 +1781,19 @@ function Heatmap({ days, grid, habits, todayKey, selectedDate, onSelect, onToggl
         })}
         {habits.map(h => (
           <React.Fragment key={h.id}>
-            <div className={`day-label habit-label ${privacyLocked ? "privacy-blurred-text" : ""}`} title={privacyLocked ? "Locked habit" : h.title}>{privacyLocked ? "Locked" : h.title.length > 8 ? h.title.slice(0,8) + ".." : h.title}</div>
+            <div className={`day-label habit-label ${privacyLocked && h.locked ? "privacy-blurred-text" : ""}`} title={privacyLocked && h.locked ? "Private habit" : h.title}>{privacyLocked && h.locked ? "Private" : h.title.length > 8 ? h.title.slice(0,8) + ".." : h.title}</div>
             {days.map(d => {
               const k = toDateKey(d);
               const checked = Boolean((grid[k] || {})[h.id]);
               const available = habitsForDate([h], k).length > 0;
               const editable = k === todayKey && available && h.active;
-              const hidden = privacyLocked && available;
+              const hidden = privacyLocked && h.locked && available;
               return (
                 <button key={k}
-                  className={`heatmap-cell ${hidden ? "privacy-hidden" : checked ? "habit-done" : "habit-miss"} ${editable && !privacyLocked ? "today" : "locked"} ${available ? "" : "dormant"} ${k === selectedDate ? "selected" : ""}`}
-                  onClick={() => privacyLocked && editable ? onRequestUnlock() : editable ? onToggle(k, h.id) : onSelect(k)}
-                  title={privacyLocked && available ? "Locked habit" : `${h.title} - ${k}: ${available ? (checked ? "Done" : "Not done") : "Not active"}${editable ? "" : " (view only)"}`}
-                  aria-label={`${privacyLocked && available ? "Locked habit" : h.title} ${k} ${editable && !privacyLocked ? "editable today" : "view only"}`}
+                  className={`heatmap-cell ${hidden ? "privacy-hidden" : checked ? "habit-done" : "habit-miss"} ${editable && !hidden ? "today" : "locked"} ${available ? "" : "dormant"} ${k === selectedDate ? "selected" : ""}`}
+                  onClick={() => hidden && editable ? onRequestUnlock() : editable ? onToggle(k, h.id) : onSelect(k)}
+                  title={hidden ? "Private habit" : `${h.title} - ${k}: ${available ? (checked ? "Done" : "Not done") : "Not active"}${editable ? "" : " (view only)"}`}
+                  aria-label={`${hidden ? "Private habit" : h.title} ${k} ${editable && !hidden ? "editable today" : "view only"}`}
                 />
               );
             })}
@@ -1754,9 +1809,9 @@ function Heatmap({ days, grid, habits, todayKey, selectedDate, onSelect, onToggl
           const lv = pct === 0 ? 0 : pct <= 0.25 ? 1 : pct <= 0.5 ? 2 : pct <= 0.75 ? 3 : pct < 1 ? 4 : 5;
           return (
             <button key={k}
-              className={`heatmap-cell ${privacyLocked ? "privacy-hidden" : `lv${lv}`} ${k === todayKey ? "today" : ""} ${k === selectedDate ? "selected" : ""}`}
+              className={`heatmap-cell lv${lv} ${k === todayKey ? "today" : ""} ${k === selectedDate ? "selected" : ""}`}
               onClick={() => onSelect(k)}
-              title={privacyLocked ? `${k}: habits locked` : `${k}: ${done}/${dayHabits.length}`}
+              title={`${k}: ${done}/${dayHabits.length}`}
             />
           );
         })}
@@ -1772,32 +1827,33 @@ function Heatmap({ days, grid, habits, todayKey, selectedDate, onSelect, onToggl
             <span>{selectedDate}</span>
             <em>{lockLabel}</em>
           </div>
-          <strong>{privacyLocked ? "--/-- habits" : `${selectedStats.done}/${selectedStats.total} habits`}</strong>
+          <strong>{selectedStats.done}/{selectedStats.total} habits</strong>
         </div>
         <div className="selected-day-checks">
           {selectedHabits.map(h => {
             const checked = Boolean(selectedChecks[h.id]);
-            const habitEditable = selectedEditable && h.active && !privacyLocked;
+            const hidden = privacyLocked && h.locked;
+            const habitEditable = selectedEditable && h.active && !hidden;
             return (
               <label
-                className={`selected-day-check ${!privacyLocked && checked ? "done" : ""} ${habitEditable ? "" : "locked"} ${privacyLocked ? "privacy-check" : ""}`}
+                className={`selected-day-check ${!hidden && checked ? "done" : ""} ${habitEditable ? "" : "locked"} ${hidden ? "privacy-check" : ""}`}
                 key={h.id}
                 onClick={event => {
-                  if (privacyLocked && selectedEditable && h.active) {
+                  if (hidden && selectedEditable && h.active) {
                     event.preventDefault();
                     onRequestUnlock();
                   }
                 }}
               >
-                <input type="checkbox" checked={!privacyLocked && checked} disabled={!habitEditable} onChange={() => onToggle(selectedDate, h.id)} />
-                <span className={privacyLocked ? "privacy-blurred-text" : ""}>{privacyLocked ? "Locked habit" : h.title}</span>
+                <input type="checkbox" checked={!hidden && checked} disabled={!habitEditable} onChange={() => onToggle(selectedDate, h.id)} />
+                <span className={hidden ? "privacy-blurred-text" : ""}>{hidden ? "Private habit" : h.title}</span>
               </label>
             );
           })}
           {selectedHabits.length === 0 && <div className="selected-day-empty">No habits were active on this day.</div>}
         </div>
-        {privacyLocked && selectedEditable && (
-          <button type="button" className="inline-unlock-button" onClick={onRequestUnlock}>Unlock habits</button>
+        {privacyLocked && selectedEditable && selectedHabits.some(h => h.locked) && (
+          <button type="button" className="inline-unlock-button" onClick={onRequestUnlock}>Unlock private habits</button>
         )}
         <SleepDaySummary entries={sleepEntries} />
         <DailyNoteEditor
@@ -2046,13 +2102,13 @@ function TopHabitsCard({ rows, privacyLocked }) {
       <div className="card-header"><h3>Top Habits</h3><span className="view-all">View All</span></div>
       <div className="top-habits-list">
         {top.map((r, i) => (
-          <div className={`top-habit-row ${privacyLocked ? "privacy-row" : ""}`} key={r.id}>
+          <div className={`top-habit-row ${privacyLocked && r.locked ? "privacy-row" : ""}`} key={r.id}>
             <div className="rank">{i + 1}</div>
             <div>
-              <div className={`top-habit-name ${privacyLocked ? "privacy-blurred-text" : ""}`}>{privacyLocked ? "Locked habit" : r.title}</div>
-              <div className="top-habit-bar"><div className="top-habit-fill" style={{ width: privacyLocked ? "55%" : `${r.pct}%` }} /></div>
+              <div className={`top-habit-name ${privacyLocked && r.locked ? "privacy-blurred-text" : ""}`}>{privacyLocked && r.locked ? "Private habit" : r.title}</div>
+              <div className="top-habit-bar"><div className="top-habit-fill" style={{ width: privacyLocked && r.locked ? "55%" : `${r.pct}%` }} /></div>
             </div>
-            <div className={`top-habit-pct ${privacyLocked ? "privacy-blurred-text" : ""}`}>{privacyLocked ? "--" : `${r.pct}%`}</div>
+            <div className={`top-habit-pct ${privacyLocked && r.locked ? "privacy-blurred-text" : ""}`}>{privacyLocked && r.locked ? "--" : `${r.pct}%`}</div>
           </div>
         ))}
       </div>
@@ -2060,10 +2116,23 @@ function TopHabitsCard({ rows, privacyLocked }) {
   );
 }
 
-function DailyNotesCard({ notes }) {
+function DailyNotesCard({ selectedDate, todayKey, noteDraft, setNoteDraft, dailyNote, notes, onSave }) {
+  const selectedEditable = selectedDate === todayKey;
   return (
     <div className="daily-notes-card">
-      <div className="card-header"><h3>Recent Notes</h3><span className="view-all">7 days</span></div>
+      <div className="card-header"><h3>What You Did Today</h3><span className="view-all">{selectedEditable ? "Today" : selectedDate}</span></div>
+      <form className="daily-note-card-form" onSubmit={onSave}>
+        <textarea
+          value={noteDraft}
+          disabled={!selectedEditable}
+          onChange={event => setNoteDraft(event.target.value)}
+          placeholder={selectedEditable ? "Write what you completed today..." : dailyNote || "Only today can be edited"}
+          maxLength={700}
+          rows={4}
+        />
+        <button type="submit" disabled={!selectedEditable}>Save note</button>
+      </form>
+      <div className="daily-notes-subhead">Recent notes · 7 days</div>
       <div className="daily-notes-list">
         {notes.length === 0 && <div className="daily-notes-empty">No daily notes saved yet.</div>}
         {notes.map(item => (
@@ -2086,11 +2155,11 @@ function DailyProgressCard({ rows, daysCount, privacyLocked }) {
           <thead><tr><th>Habit</th><th>Goal</th><th>Progress</th><th>Streak</th></tr></thead>
           <tbody>
             {rows.map(r => (
-              <tr key={r.id} className={privacyLocked ? "privacy-row" : ""}>
-                <td className={privacyLocked ? "privacy-blurred-text" : ""}>{privacyLocked ? "Locked habit" : r.title}</td>
+              <tr key={r.id} className={privacyLocked && r.locked ? "privacy-row" : ""}>
+                <td className={privacyLocked && r.locked ? "privacy-blurred-text" : ""}>{privacyLocked && r.locked ? "Private habit" : r.title}</td>
                 <td>{r.targetPerWeek}/wk</td>
-                <td><span className="mini-bar"><i style={{width: privacyLocked ? "55%" : `${r.pct}%`}} /></span> {privacyLocked ? "--" : `${r.pct}%`}</td>
-                <td className="streak">{privacyLocked ? "--" : r.streak}</td>
+                <td><span className="mini-bar"><i style={{width: privacyLocked && r.locked ? "55%" : `${r.pct}%`}} /></span> {privacyLocked && r.locked ? "--" : `${r.pct}%`}</td>
+                <td className="streak">{privacyLocked && r.locked ? "--" : r.streak}</td>
               </tr>
             ))}
           </tbody>
