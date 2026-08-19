@@ -46,20 +46,46 @@ const COLOR_MAP = Object.fromEntries(HABIT_COLORS.map(c => [c.id, c.hex]));
 const EMOJIS = ["🏃", "📖", "🧘", "💧", "🌙", "🥗", "✍️", "🎯", "💪", "🧠", "🚶", "🧹", "🙏", "🍎", "🧪", "☎️"];
 
 const TEMPLATES = [
-  { title: "Move for 30 minutes", emoji: "🏃", color: "mint", days: ALL_DAYS, targetPerWeek: 5, when: "morning", kind: "check" },
-  { title: "Read 10 pages", emoji: "📖", color: "indigo", days: ALL_DAYS, targetPerWeek: 7, when: "evening", kind: "count", goal: 10 },
-  { title: "Meditate", emoji: "🧘", color: "violet", days: ALL_DAYS, targetPerWeek: 7, when: "morning", kind: "check" },
-  { title: "Drink water", emoji: "💧", color: "cyan", days: ALL_DAYS, targetPerWeek: 7, when: "day", kind: "count", goal: 8 },
-  { title: "Sleep by 11", emoji: "🌙", color: "blue", days: ALL_DAYS, targetPerWeek: 6, when: "evening", kind: "check" },
-  { title: "Eat well", emoji: "🥗", color: "lime", days: ALL_DAYS, targetPerWeek: 6, when: "day", kind: "check" },
-  { title: "Journal", emoji: "✍️", color: "amber", days: ALL_DAYS, targetPerWeek: 5, when: "evening", kind: "check" },
   { title: "Deep work", emoji: "🎯", color: "rose", days: WEEKDAYS, targetPerWeek: 5, when: "day", kind: "check" },
+  { title: "Lift / train", emoji: "💪", color: "mint", days: ALL_DAYS, targetPerWeek: 5, when: "morning", kind: "check" },
+  { title: "Sleep by 11", emoji: "🌙", color: "blue", days: ALL_DAYS, targetPerWeek: 6, when: "evening", kind: "check" },
+  { title: "No phone first hour", emoji: "🧠", color: "violet", days: ALL_DAYS, targetPerWeek: 7, when: "morning", kind: "check" },
+  { title: "Ship one thing", emoji: "🚀", color: "amber", days: WEEKDAYS, targetPerWeek: 5, when: "day", kind: "check" },
+  { title: "Walk after meetings", emoji: "🚶", color: "cyan", days: WEEKDAYS, targetPerWeek: 5, when: "day", kind: "check" },
+  { title: "LeetCode", emoji: "💻", color: "indigo", days: ALL_DAYS, targetPerWeek: 5, when: "day", kind: "check" },
+  { title: "Read 10 pages", emoji: "📖", color: "pink", days: ALL_DAYS, targetPerWeek: 7, when: "evening", kind: "count", goal: 10 },
 ];
 const TIME_GROUPS = [
   { id: "morning", label: "Morning" },
   { id: "day", label: "Day" },
   { id: "evening", label: "Evening" },
 ];
+const WALLS = [
+  { id: "gotham", src: "/walls/gotham.jpg", label: "Gotham" },
+  { id: "aurora", src: "/walls/aurora.jpg", label: "Aurora" },
+  { id: "nebula", src: "/walls/nebula.jpg", label: "Nebula" },
+  { id: "dusk", src: "/walls/dusk.jpg", label: "Dusk" },
+  { id: "silk", src: "/walls/silk.jpg", label: "Silk" },
+  { id: "ember", src: "/walls/ember.jpg", label: "Ember" },
+];
+const QUOTES = [
+  "You do not need more time. You need the same hour, every day.",
+  "Busy is not the enemy. Untracked days are.",
+  "Protect the hour. The rest of the day can be chaos.",
+  "One box. Then the next. That is how careers are built.",
+  "Consistency is the only flex that compounds.",
+  "The heatmap does not care that you were tired.",
+  "Show up like the work is already yours.",
+  "Small reps. Public results. Private discipline.",
+  "A full calendar is not a life. A filled heatmap is.",
+  "Do the boring thing while the world is loud.",
+  "Talent is common. The people who check the box win.",
+  "Keep the promise small enough to keep on a brutal day.",
+];
+function quoteForDay(key) {
+  const n = String(key || "").split("").reduce((s, c) => s + c.charCodeAt(0), 0);
+  return QUOTES[n % QUOTES.length];
+}
 
 const LEGACY_DEFAULT_HABIT_IDS = new Set([
   "clean-room", "assignments", "digital-files", "read",
@@ -598,6 +624,8 @@ function App() {
   const [noteDraft, setNoteDraft] = useState("");
   const [welcomeState, setWelcomeState] = useState("");
   const [tab, setTab] = useState("today");
+  const [wallId, setWallId] = useState(() => localStorage.getItem("dayforge_wall") || "gotham");
+  const [clock, setClock] = useState(() => new Date());
   const [sheet, setSheet] = useState(null);
   const [habitDraft, setHabitDraft] = useState(() => emptyHabitDraft());
   const [editingHabitId, setEditingHabitId] = useState("");
@@ -633,11 +661,16 @@ function App() {
   }, []);
 
   useEffect(() => {
-    document.body.dataset.theme = theme;
-    localStorage.setItem("dayforge_theme", theme);
+    document.body.dataset.theme = "dark";
+    localStorage.setItem("dayforge_theme", "dark");
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", theme === "dark" ? "#000000" : "#f5f5f7");
+    if (meta) meta.setAttribute("content", "#070a12");
   }, [theme]);
+  useEffect(() => { localStorage.setItem("dayforge_wall", wallId); }, [wallId]);
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(new Date()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!user || !workspaceReady) return;
@@ -737,10 +770,11 @@ function App() {
     if (!user || !workspaceReady) return;
     const onKey = (event) => {
       if (event.target.closest("input, textarea, select, [contenteditable]")) return;
-      if (event.key === "t") setTab("today");
-      if (event.key === "c") setTab("calendar");
-      if (event.key === "i") setTab("insights");
       if (event.key === "a") openNewHabit();
+      if (event.key === "w") {
+        const i = WALLS.findIndex(w => w.id === wallId);
+        setWallId(WALLS[(i + 1) % WALLS.length].id);
+      }
       if (/^[1-9]$/.test(event.key)) {
         const remaining = habitsForDate(trackedHabits, dayforgeTodayKey()).filter(h => h.active && !isClosed((grid[dayforgeTodayKey()] || {})[h.id], h));
         const habit = remaining[Number(event.key) - 1];
@@ -752,7 +786,7 @@ function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [user, workspaceReady, trackedHabits, grid]);
+  }, [user, workspaceReady, trackedHabits, grid, wallId]);
 
   async function authHeaders() {
     const h = { "Content-Type": "application/json", "X-Demo-User": user?.uid || "dayforge-local" };
@@ -1293,62 +1327,75 @@ function App() {
   const weekSlice = lastNDays(7);
   const yearSlice = lastNDays(112);
   const upcomingReminder = [...reminders].filter(r => !r.done).sort((a, b) => reminderStamp(a).localeCompare(reminderStamp(b)))[0];
+  const wall = WALLS.find(w => w.id === wallId) || WALLS[0];
+  const quote = quoteForDay(todayKey);
+  const monthHabits = trackedHabits.filter(h => h.active);
+  const clockLabel = clock.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+
+  function Wallpaper({ children, center }) {
+    return (
+      <div className={`stage ${center ? "center" : ""}`}>
+        <div className="bg" aria-hidden="true">
+          <img src={wall.src} alt="" className="bg-img" />
+          <div className="vignette" />
+          <div className="noise" />
+        </div>
+        {children}
+      </div>
+    );
+  }
 
   if (!authReady) {
     return (
-      <div className="splash">
-        <div className="splash-card">
-          <div className="mark"><Mark /></div>
+      <Wallpaper center>
+        <div className="splash-card glass">
           <div className="wordmark">DayForge</div>
           <p className="lede">Building your day</p>
           <div className="spin" />
         </div>
-      </div>
+      </Wallpaper>
     );
   }
 
   if (!user) {
     return (
-      <div className="gate">
-        <div className="gate-inner">
-          <div className="mark"><Mark /></div>
-          <p className="kicker">Habit tracker</p>
-          <h1>Keep the promise. Watch it compound.</h1>
-          <p className="lede">Rings for today. A calendar that tells the truth. Streaks that do not break because today is not over yet.</p>
+      <Wallpaper center>
+        <div className="gate-inner glass">
+          <p className="kicker">One page. One heatmap.</p>
+          <h1>Consistency for a brutal calendar.</h1>
+          <p className="lede">Built for people who live in the browser and still want a private proof of the hour they protect.</p>
           <div className="features">
-            <div className="feature"><i>✓</i> Check or count. Morning, day, evening. Skip without killing the streak.</div>
-            <div className="feature"><i>▣</i> A calendar that fills like a contribution graph, plus yesterday catch-up.</div>
-            <div className="feature"><i>◎</i> Honest streaks: today is not over, rest days do not count as misses.</div>
+            <div className="feature">Heatmap first — every habit, every day, one screen.</div>
+            <div className="feature">Click today. That is the whole system.</div>
+            <div className="feature">Wallpaper, quote, streak. No notes. No extra rooms.</div>
           </div>
           <button type="button" className="primary" onClick={handleAuth}>Continue with Google</button>
           <p className="hint">{syncState}</p>
         </div>
-      </div>
+      </Wallpaper>
     );
   }
 
   if (!workspaceReady) {
     return (
-      <div className="splash">
-        <div className="splash-card">
-          <div className="mark"><Mark /></div>
+      <Wallpaper center>
+        <div className="splash-card glass">
           <div className="wordmark">DayForge</div>
-          <p className="lede">{syncState || "Loading your habits"}</p>
+          <p className="lede">{syncState || "Loading your heatmap"}</p>
           <div className="spin" />
         </div>
-      </div>
+      </Wallpaper>
     );
   }
 
-  if (activeHabits.length === 0 && trackedHabits.filter(h => h.active).length === 0) {
+  if (monthHabits.length === 0) {
     return (
-      <div className="gate">
-        <div className="gate-inner">
-          <div className="mark"><Mark /></div>
+      <Wallpaper center>
+        <div className="gate-inner glass">
           <p className="kicker">Start here</p>
-          <h1>Add one habit. Make it real.</h1>
-          <p className="lede">Pick a template or write your own. The tracker stays empty until you mean it.</p>
-          <form className="field" onSubmit={saveProfileName} style={{ textAlign: "left", marginTop: 18 }}>
+          <h1>One habit. The heatmap wakes up.</h1>
+          <p className="lede">Pick something you can keep on a brutal day.</p>
+          <form className="field" onSubmit={saveProfileName}>
             <span>Your name</span>
             <input value={profileDraft} onChange={e => setProfileDraft(e.target.value)} maxLength={80} />
           </form>
@@ -1369,10 +1416,6 @@ function App() {
             <button type="submit">Add</button>
           </form>
           <p className="hint">{syncState}</p>
-          <div style={{ marginTop: 16, display: "flex", justifyContent: "center", gap: 10 }}>
-            <button className="text-btn" type="button" onClick={handleAuth}>Sign out</button>
-            <button className="text-btn" type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>{theme === "dark" ? "Light" : "Dark"}</button>
-          </div>
           {sheet === "habit" && (
             <HabitSheet
               draft={habitDraft}
@@ -1383,244 +1426,146 @@ function App() {
             />
           )}
         </div>
-      </div>
+      </Wallpaper>
     );
   }
 
   return (
-    <div className="app" onClick={() => menuOpen && setMenuOpen(false)}>
-      <header className="topbar">
-        <div className="brand"><span className="brand-mark"><Mark /></span> DayForge</div>
-        <nav className="nav-pills">
-          {["today", "calendar", "insights"].map(id => (
-            <button key={id} className={tab === id ? "on" : ""} type="button" onClick={() => setTab(id)}>
-              {id[0].toUpperCase() + id.slice(1)}
-            </button>
+    <Wallpaper>
+      <header className="bar glass" onClick={() => menuOpen && setMenuOpen(false)}>
+        <div className="brand">DayForge</div>
+        <div className="bar-grow" />
+        <div className="month-nav">
+          <button className="ico" type="button" onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() - 1, 1))}>‹</button>
+          <h2>{monthDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}</h2>
+          <button className="ico" type="button" onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1))}>›</button>
+        </div>
+        <div className="bar-grow" />
+        <div className="walls" title="Wallpaper · W">
+          {WALLS.map(item => (
+            <button
+              key={item.id}
+              type="button"
+              className={item.id === wallId ? "on" : ""}
+              style={{ backgroundImage: `url(${item.src})` }}
+              onClick={() => setWallId(item.id)}
+              aria-label={item.label}
+            />
           ))}
-        </nav>
-        <div className="top-actions">
-          <button className={`icon-btn ${upcomingReminder ? "dot" : ""}`} type="button" title="Reminders" onClick={() => setSheet("reminders")}>
-            <BellIcon />
-          </button>
-          <button className="icon-btn" type="button" title="Theme" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
-            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-          </button>
-          <div className="menu">
-            <button className="avatar" type="button" onClick={e => { e.stopPropagation(); setMenuOpen(v => !v); }}>{initials}</button>
-            {menuOpen && (
-              <div className="menu-pop" onClick={e => e.stopPropagation()}>
-                <form onSubmit={saveProfileName} className="field" style={{ padding: "8px 8px 0" }}>
-                  <span>Name</span>
-                  <input value={profileDraft} onChange={e => setProfileDraft(e.target.value)} maxLength={80} />
-                </form>
-                <button type="button" onClick={() => setSheet("reminders")}>Reminders<span className="sub">{reminderState}</span></button>
-                <button type="button" onClick={handleAuth}>Sign out<span className="sub">{user.email}</span></button>
-              </div>
-            )}
-          </div>
+        </div>
+        <button className={`ico ${upcomingReminder ? "dot" : ""}`} type="button" title="Reminders" onClick={() => setSheet("reminders")}>
+          <BellIcon />
+        </button>
+        <div className="menu">
+          <button className="avatar" type="button" onClick={e => { e.stopPropagation(); setMenuOpen(v => !v); }}>{initials}</button>
+          {menuOpen && (
+            <div className="menu-pop" onClick={e => e.stopPropagation()}>
+              <form onSubmit={saveProfileName} className="field" style={{ margin: "4px 0 8px" }}>
+                <span>Name</span>
+                <input value={profileDraft} onChange={e => setProfileDraft(e.target.value)} maxLength={80} />
+              </form>
+              <button type="button" onClick={() => setSheet("reminders")}>Reminders<span className="sub">{reminderState}</span></button>
+              <button type="button" onClick={handleAuth}>Sign out<span className="sub">{user.email}</span></button>
+            </div>
+          )}
         </div>
       </header>
 
-      {tab === "today" && (
-        <main className="page">
-          <section className="hero">
-            <div>
-              <div className="kicker">{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div>
-              <h1>{greetingFor()}, {firstName}.</h1>
-              <p>
-                {todayStats.total
-                  ? (todayStats.done === todayStats.total ? "Every habit is closed. Protect this." : `${todayStats.total - todayStats.done} left to close today.`)
-                  : "Nothing is scheduled today."}
-              </p>
-              <div className="metrics">
-                <div className="metric"><strong>{cs}</strong><span>Day streak</span></div>
-                <div className="metric"><strong>{todayStats.done}/{todayStats.total || 0}</strong><span>Today</span></div>
-                <div className="metric"><strong>{perfect}</strong><span>Perfect days</span></div>
-              </div>
-            </div>
-            <Ring value={todayStats.pct} />
-          </section>
-
-          {(celebrate || todayStats.pct === 100) && todayStats.total > 0 && (
-            <div className="perfect">Perfect day. Every scheduled habit is closed.</div>
-          )}
-          {catchUpOpen && (
-            <button className="catchup" type="button" onClick={() => { setTab("calendar"); setSelectedDate(yKey); setMonthDate(dateFromKey(yKey)); }}>
-              Yesterday still has {yesterdayStats.total - yesterdayStats.done} open. Catch up without breaking the streak.
-            </button>
-          )}
-
-          <div className="section-head">
-            <h2>Today</h2>
-            <button type="button" onClick={() => openNewHabit()}>Add habit</button>
+      <section className="hero-line">
+        <div className="hero-copy">
+          <div className="clock">{clockLabel}</div>
+          <h1>{greetingFor()}, {firstName}.</h1>
+          <p className="quote">“{quote}”</p>
+          <div className="pills">
+            <span><strong>{cs}</strong> day streak</span>
+            <span><strong>{todayStats.done}/{todayStats.total || 0}</strong> today</span>
+            <span><strong>{ms.pct}%</strong> this month</span>
+            <span><strong>{perfect}</strong> perfect days</span>
           </div>
-          {groupedToday.map(group => (
-            <div key={group.id}>
-              <div className="group-label">{group.label}</div>
-              <div className="habit-list">
-                {group.habits.map(h => (
-                  <HabitRow
-                    key={h.id}
-                    habit={h}
-                    dateKey={todayKey}
-                    grid={grid}
-                    weekSlice={weekSlice}
-                    editable
-                    onToggle={() => toggleHabit(todayKey, h.id)}
-                    onBump={delta => bumpHabit(todayKey, h.id, delta)}
-                    onSkip={() => skipHabit(todayKey, h.id)}
-                    onEdit={() => openEditHabit(h)}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
-          {activeHabits.length === 0 && <div className="hint" style={{ padding: 16 }}>Nothing is scheduled for today.</div>}
+        </div>
+        <div className="ring-mini"><Ring value={todayStats.pct} size={108} /></div>
+      </section>
 
-          <section className="card">
-            <h3>One-off today</h3>
-            <div className="extras-list">
-              {(dailyExtras[todayKey] || []).map(item => (
-                <div className={`extra-item ${item.done ? "done" : ""}`} key={item.id}>
-                  <input type="checkbox" checked={item.done} onChange={() => toggleExtraItem(todayKey, item.id)} />
-                  <span>{item.title}</span>
-                  <button className="ghost" type="button" onClick={() => deleteExtraItem(todayKey, item.id)}>&times;</button>
-                </div>
-              ))}
-            </div>
-            <form className="inline-form" onSubmit={addExtraItem}>
-              <input value={extraDraft} onChange={e => setExtraDraft(e.target.value)} placeholder="Meeting, assignment, call…" maxLength={90} />
-              <button type="submit">Add</button>
-            </form>
-          </section>
-
-          <section className="card journal">
-            <h3>Today’s note</h3>
-            <form onSubmit={saveDailyNote}>
-              <textarea value={noteDraft} onChange={e => setNoteDraft(e.target.value)} placeholder="What actually happened today?" maxLength={700} />
-              <div className="row-actions"><button className="save" type="submit">Save note</button></div>
-            </form>
-          </section>
-          <p className="sync">{syncState}{welcomeState ? ` · ${welcomeState}` : ""}</p>
-        </main>
+      {catchUpOpen && (
+        <button className="catchup" type="button" onClick={() => setSelectedDate(yKey)}>
+          Yesterday still has {yesterdayStats.total - yesterdayStats.done} open. Click that column.
+        </button>
       )}
 
-      {tab === "calendar" && (
-        <main className="page">
-          <div className="cal-nav">
-            <button className="icon-btn" type="button" onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() - 1, 1))}>‹</button>
-            <h2>{monthDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}</h2>
-            <button className="icon-btn" type="button" onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1))}>›</button>
-          </div>
-          <section className="card">
-            <div className="cal-grid">
-              {DOW.map((d, i) => <div className="dow" key={`${d}${i}`}>{d}</div>)}
-              {Array.from({ length: new Date(monthDate.getFullYear(), monthDate.getMonth(), 1).getDay() }, (_, i) => (
-                <div className="cal-cell off" key={`pad-${i}`} />
-              ))}
-              {days.map(d => {
-                const k = toDateKey(d);
-                const s = dayStats(grid[k] || {}, habitsForDate(trackedHabits, d));
-                const lv = !s.total ? 0 : s.pct === 100 ? 4 : s.pct >= 75 ? 3 : s.pct >= 40 ? 2 : s.pct > 0 ? 1 : 0;
-                return (
-                  <button
-                    key={k}
-                    className={`cal-cell lv${lv} ${k === todayKey ? "today" : ""} ${k === selectedDate ? "selected" : ""}`}
-                    type="button"
-                    onClick={() => setSelectedDate(k)}
-                  >
-                    {d.getDate()}
-                    {s.total > 0 && <span className="pip" />}
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-          <section className="card">
-            <div className="section-head" style={{ padding: 0 }}>
-              <h3>{selectedDate === todayKey ? "Selected · Today" : selectedDate}</h3>
-              <span className="hint">{selectedStats.done}/{selectedStats.total} · {canEditDay(selectedDate) ? (selectedDate === todayKey ? "Today" : "Catch-up") : "History"}</span>
-            </div>
-            <div className="day-panel" style={{ marginTop: 12 }}>
-              {selectedHabits.map(h => (
-                <HabitRow
-                  key={h.id}
-                  habit={h}
-                  dateKey={selectedDate}
-                  grid={grid}
-                  weekSlice={weekSlice}
-                  compact
-                  editable={canEditDay(selectedDate)}
-                  onToggle={() => toggleHabit(selectedDate, h.id)}
-                  onBump={delta => bumpHabit(selectedDate, h.id, delta)}
-                  onSkip={() => skipHabit(selectedDate, h.id)}
-                  onEdit={() => openEditHabit(h)}
-                />
-              ))}
-              {selectedHabits.length === 0 && <p className="hint">No habits were scheduled this day.</p>}
-            </div>
-          </section>
-        </main>
-      )}
-
-      {tab === "insights" && (
-        <main className="page">
-          <div className="stat-grid">
-            <div className="stat"><strong>{cs}</strong><span>Current streak</span></div>
-            <div className="stat"><strong>{ls}</strong><span>Best streak</span></div>
-            <div className="stat"><strong>{ms.pct}%</strong><span>This month</span></div>
-            <div className="stat"><strong>{perfect}</strong><span>Perfect days</span></div>
-          </div>
-          <section className="card">
-            <h3>Weeks this month</h3>
-            <div className="week-rings">
-              {ws.map(w => (
-                <div className="item" key={w.label}>
-                  <Ring value={w.pct} label="" size={86} />
-                  <span>{w.label}</span>
-                  <em>{w.range}</em>
-                </div>
-              ))}
-            </div>
-          </section>
-          <section className="card">
-            <h3>Each habit</h3>
-            {trackedHabits.filter(h => h.active).map(h => {
-              const eligible = days.filter(d => habitScheduledOn(h, d));
-              const done = eligible.filter(d => habitClosedOn(grid, h, toDateKey(d))).length;
-              const pct = eligible.length ? Math.round((done / eligible.length) * 100) : 0;
-              const streak = habitCurrentStreak(grid, h, todayKey);
-              const best = habitBestStreak(grid, h);
+      <section className="heat glass">
+        <div className="heat-top">
+          <h3>Habit heatmap</h3>
+          <em>
+            {todayStats.total
+              ? (todayStats.done === todayStats.total ? "Day closed. Protect it." : `${todayStats.total - todayStats.done} left today — click the gold column`)
+              : "Add a habit. The grid is the product."}
+            {" · "}Shift-click skips
+          </em>
+        </div>
+        <div className="heat-scroll">
+          <div className="heat-grid" style={{ "--days": days.length }}>
+            <div />
+            {days.map(d => {
+              const k = toDateKey(d);
+              return <div key={k} className={`colh ${k === todayKey ? "today" : ""}`}>{d.getDate()}</div>;
+            })}
+            {monthHabits.map(h => (
+              <React.Fragment key={h.id}>
+                <button className="lab" type="button" onClick={() => openEditHabit(h)} title={h.title}>
+                  <span>{h.emoji}</span><b>{h.title}</b>
+                </button>
+                {days.map(d => {
+                  const k = toDateKey(d);
+                  const available = habitScheduledOn(h, k);
+                  const closed = available && habitClosedOn(grid, h, k);
+                  const skipped = available && isSkipped((grid[k] || {})[h.id]);
+                  const live = available && canEditDay(k);
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      className={`cell ${closed ? "on" : ""} ${skipped ? "skip" : ""} ${live ? "live" : ""} ${available ? "" : "dormant"} ${k === todayKey ? "today" : ""} ${k === selectedDate ? "sel" : ""}`}
+                      style={{ "--h": colorOf(h) }}
+                      title={`${h.title} · ${k}${skipped ? " · skipped" : closed ? " · done" : ""}`}
+                      onClick={event => {
+                        if (live && event.shiftKey) skipHabit(k, h.id);
+                        else if (live) toggleHabit(k, h.id);
+                        else setSelectedDate(k);
+                      }}
+                    />
+                  );
+                })}
+              </React.Fragment>
+            ))}
+            <div className="lab" style={{ color: "var(--faint)" }}>Day</div>
+            {days.map(d => {
+              const k = toDateKey(d);
+              const s = dayStats(grid[k] || {}, habitsForDate(monthHabits, d));
+              const lv = !s.total ? 0 : s.pct === 100 ? 4 : s.pct >= 75 ? 3 : s.pct >= 40 ? 2 : s.pct > 0 ? 1 : 0;
               return (
-                <div className="habit-insight" key={h.id} style={{ "--h": colorOf(h) }}>
-                  <div className="insight-top">
-                    <strong>{h.emoji} {h.title}</strong>
-                    <span className="hint">{pct}% · streak {streak} · best {best}</span>
-                  </div>
-                  <div className="bar"><i style={{ width: `${pct}%` }} /></div>
-                  <div className="year">
-                    {yearSlice.map(d => {
-                      const k = toDateKey(d);
-                      const on = habitScheduledOn(h, d) && habitClosedOn(grid, h, k);
-                      return <b key={k} className={on ? "on" : ""} title={k} />;
-                    })}
-                  </div>
-                </div>
+                <button
+                  key={`all-${k}`}
+                  type="button"
+                  className={`cell lv${lv} ${k === todayKey ? "today" : ""} ${k === selectedDate ? "sel" : ""}`}
+                  onClick={() => setSelectedDate(k)}
+                  title={`${k}: ${s.done}/${s.total}`}
+                />
               );
             })}
-          </section>
-        </main>
-      )}
-
-      <button className="fab" type="button" onClick={() => openNewHabit()} aria-label="Add habit">+</button>
-      <nav className="tabbar">
-        {["today", "calendar", "insights"].map(id => (
-          <button key={id} className={tab === id ? "on" : ""} type="button" onClick={() => setTab(id)}>
-            {id === "today" ? "●" : id === "calendar" ? "▣" : "◎"}
-            {id[0].toUpperCase() + id.slice(1)}
-          </button>
-        ))}
-      </nav>
+          </div>
+        </div>
+        <form className="add" onSubmit={saveHabitForm}>
+          <input
+            value={habitDraft.title}
+            onChange={e => setHabitDraft(d => ({ ...d, title: e.target.value }))}
+            placeholder="Add a habit you can keep on a brutal day"
+            maxLength={80}
+          />
+          <button type="submit">Add</button>
+          <button type="button" onClick={() => openNewHabit()} style={{ background: "transparent", color: "#fff", border: "1px solid var(--stroke)" }}>Tune</button>
+        </form>
+      </section>
+      <p className="sync">{syncState}</p>
 
       {sheet === "habit" && (
         <HabitSheet
@@ -1645,7 +1590,7 @@ function App() {
       )}
       {toast && <div className="toast">{toast}</div>}
       {celebrate && todayStats.pct === 100 && <Burst />}
-    </div>
+    </Wallpaper>
   );
 }
 
