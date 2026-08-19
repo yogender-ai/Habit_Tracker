@@ -1,95 +1,47 @@
-# DayForge Momentum
+# DayForge
 
-DayForge is a recovery and focus dashboard for turning "remove addiction -> focus on goal -> build proof" into a daily game. It has tasks, goals, habit heatmaps, clean streaks, urge logging, recovery rescue plans, awards, calendar reminders, Firebase sign-in, cloud persistence, and Resend email notifications.
+A focused habit tracker. Check in for today, keep an honest streak, and watch a month fill in like a contribution graph.
+
+Hide / privacy lock is gone. Habits stay visible. The product is the tracker, not a dashboard of extra systems.
+
+Live: [dayforge.yogender1.me](https://dayforge.yogender1.me)
+
+## Why it is built this way
+
+- **Today first.** Morning / day / evening groups, large tap targets, a ring, and a week of dots beside every habit.
+- **Check or count.** Close a box, or count glasses / pages to a daily goal.
+- **Honest streaks.** Missing today does not break a streak until the day is over. Skip a day and the streak holds. Unscheduled days never count as misses.
+- **Yesterday catch-up.** The previous day stays editable so one late night does not wreck the graph.
+- **Real schedules.** Daily, weekdays, weekends, or any mix of days, plus a weekly goal.
+- **Calendar that tells the truth.** Each day fills by how much of the scheduled list you actually closed.
+- **Insights.** Current / best streak, perfect days, weekly rings, and a year-style heatmap per habit.
+- **Keys.** `1–9` close the next open habit. `t` `c` `i` switch views. `a` adds a habit.
+- **Local first, cloud when signed in.** Google sign-in, offline queue, Firebase + API sync.
 
 ## Stack
 
-- Frontend: Vite, React, Firebase browser auth
+- Frontend: Vite, React, Firebase Auth
 - Backend: FastAPI, SQLAlchemy, Postgres/SQLite
-- Database: Neon/Postgres primary with optional secondary fallback
-- Notifications: Resend email API
-- Deploy: Vercel frontend, Render backend
+- Deploy: Vercel (frontend), Render (API)
 
-## Local Frontend
+## Local
 
 ```bash
 npm install
 npm run dev
 ```
 
-Set `public/config.js` before using cloud sync from Vercel/local Vite:
-
-```js
-window.DAYFORGE_CONFIG = {
-  apiBaseUrl: "https://your-render-service.onrender.com",
-  firebase: {
-    apiKey: "...",
-    authDomain: "...",
-    projectId: "...",
-    appId: "..."
-  },
-  appTimezone: "Asia/Kolkata"
-};
-```
-
-You can also set the same connection at build time with Vite env vars:
-
-```bash
-VITE_API_BASE_URL=https://your-render-service.onrender.com
-VITE_APP_TIMEZONE=Asia/Kolkata
-```
-
-The frontend always saves to `localStorage` first. In local dev, an empty `apiBaseUrl` points to `http://127.0.0.1:8000`. On Vercel, set `VITE_API_BASE_URL` to your Render backend URL so the built frontend calls it directly.
-
-## Local Backend
+Optional API:
 
 ```bash
 pip install -r requirements.txt
 npm run api
 ```
 
-If no database env vars are set, the backend uses local SQLite for testing.
+Set `public/config.js` (or Vite env vars) for Firebase and the API base URL. An empty `apiBaseUrl` in local dev points at `http://127.0.0.1:8000`.
 
-## Render Env Vars
+## Deploy
 
-Save these in the Render web service environment:
+Frontend is a Vite app. `vercel.json` builds `dist` and rewrites to `index.html`.
 
-```bash
-APP_TIMEZONE=Asia/Kolkata
-CORS_ORIGINS=https://your-vercel-app.vercel.app,http://localhost:5173,http://127.0.0.1:5173
-APP_PUBLIC_URL=https://your-vercel-app.vercel.app
-DATABASE_URL_PRIMARY=postgresql://...
-DATABASE_URL_SECONDARY=postgresql://...
-FIREBASE_PROJECT_ID=news-intel-d1bd3
-FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
-ALLOW_DEV_AUTH=false
-
-RESEND_API_KEY=re_...
-RESEND_FROM_EMAIL=DayForge <noreply@your-verified-domain.com>
-RESEND_REPLY_TO=your-email@example.com
-NOTIFICATION_CRON_SECRET=use-a-long-random-secret
-```
-
-For Resend, `RESEND_FROM_EMAIL` must use a sender/domain verified in Resend. Keep `RESEND_API_KEY` secret.
-
-## Scheduled Notifications
-
-Create a cron job from Render Cron, cron-job.org, GitHub Actions, or any scheduler that calls:
-
-```bash
-POST https://your-render-service.onrender.com/api/notifications/due
-X-Cron-Secret: your-NOTIFICATION_CRON_SECRET
-```
-
-Run it every 10-15 minutes. The backend sends due calendar reminders, morning launch emails, evening reviews, and relapse-shield emails through Resend.
-
-## API
-
-- `GET /health`
-- `GET /api/snapshot?year=2026`
-- `PUT /api/days/<YYYY-MM-DD>`
-- `PUT /api/workspace`
-- `POST /api/notifications/test`
-- `POST /api/notifications/due`
-
-When Firebase Admin is configured, `/api/*` requires a Firebase bearer token. In local development without Firebase Admin or database env vars, dev auth is allowed automatically.
+Set `VITE_API_BASE_URL` in Vercel if the FastAPI backend is on Render.
